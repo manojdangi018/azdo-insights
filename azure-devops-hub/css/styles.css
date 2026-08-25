@@ -1,0 +1,12 @@
+/* Custom Scrollbars and Table Tweaks */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.truncate-cell {
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
