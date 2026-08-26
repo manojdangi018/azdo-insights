@@ -49,6 +49,13 @@ version tag) `tfx extension publish`.
 Remember to bump `"version"` in `vss-extension.json` before each tag —
 Azure DevOps requires strictly increasing version numbers per publish.
 
+**Note on `package-lock.json`:** this scaffold doesn't ship one (it was
+generated offline, without npm registry access). Run `npm install` locally
+once and commit the resulting `package-lock.json` — that makes builds
+reproducible and lets you switch the workflow back to `npm ci` +
+`cache: "npm"` for faster runs. Without it, the workflow uses plain
+`npm install`, which still works but re-resolves versions each run.
+
 ## Folder structure
 
 ```

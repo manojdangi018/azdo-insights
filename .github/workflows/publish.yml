@@ -24,11 +24,13 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: "lts/*"
+          # No cache: "npm" here — that requires a committed package-lock.json,
+          # which this scaffold doesn't include. Run `npm install` locally once
+          # and commit the generated package-lock.json to re-enable caching.
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build (webpack)
         run: npm run build
