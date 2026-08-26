@@ -1,0 +1,28 @@
+{
+  "name": "azdo-intelligence-hub",
+  "version": "1.0.0",
+  "description": "Azure DevOps extension: Repositories, Pipelines, Work Items, Security & User Activity dashboard",
+  "private": true,
+  "scripts": {
+    "build": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
+    "package": "npm run build && tfx extension create --manifest-globs vss-extension.json --output-path ./package",
+    "package:dev": "npm run build && tfx extension create --manifest-globs vss-extension.json --output-path ./package --override \"{\\\"public\\\":false}\""
+  },
+  "dependencies": {
+    "azure-devops-extension-api": "^4.240.0",
+    "azure-devops-extension-sdk": "^4.0.2"
+  },
+  "comments": {
+    "note": "Chart.js, chartjs-plugin-datalabels and xlsx are loaded via CDN <script> tags in src/index.html, not bundled — see src/index.html <head>."
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^6.8.1",
+    "html-webpack-plugin": "^5.5.3",
+    "style-loader": "^3.3.3",
+    "tfx-cli": "^0.17.0",
+    "webpack": "^5.88.2",
+    "webpack-cli": "^5.1.4"
+  }
+}
