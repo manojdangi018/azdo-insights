@@ -91,7 +91,7 @@ button { cursor: pointer; }
 .path-chip { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; align-items: center; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; color: #475569; background: #f8fafc; font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; text-decoration: none; }
 .path-chip:hover { color: var(--primary); border-color: #bfdbfe; }
 
-.connection-grid { display: grid; grid-template-columns: 1.05fr 1.35fr .95fr .95fr; gap: 14px; padding-top: 18px; }
+.connection-grid { display: grid; grid-template-columns: 1.05fr 1.35fr .95fr; gap: 14px; padding-top: 18px; }
 .field-group { min-width: 0; }
 .field-group label { display: block; margin: 0 0 6px; color: #475569; font-size: 10px; line-height: 1.2; font-weight: 750; }
 .field-group label span { color: #ef4444; }
@@ -99,14 +99,14 @@ button { cursor: pointer; }
 .field-help { margin: 5px 0 0; color: #94a3b8; font-size: 9px; line-height: 1.4; }
 .input-with-icon { position: relative; }
 .input-icon { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 12px; pointer-events: none; }
-.field-group input, .field-group select, .substep-controls input, .substep-controls select, #targetOrg, #targetPat, #projectSelect, #categorySelect {
+.field-group input, .field-group select, .substep-controls input, .substep-controls select, #targetOrg, #targetPat, #projectSelect {
   width: 100%; height: 38px; border: 1px solid #d8e0ea; border-radius: 8px; background: #fff; color: #0f172a; outline: none; padding: 0 11px; font-size: 11px; transition: .16s ease;
 }
 .input-with-icon input { padding-left: 31px; }
-.field-group input:focus, .field-group select:focus, .substep-controls input:focus, .substep-controls select:focus, #targetOrg:focus, #targetPat:focus, #projectSelect:focus, #categorySelect:focus {
+.field-group input:focus, .field-group select:focus, .substep-controls input:focus, .substep-controls select:focus, #targetOrg:focus, #targetPat:focus, #projectSelect:focus {
   border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59,130,246,.10);
 }
-.field-group select:disabled, #projectSelect:disabled, #categorySelect:disabled { background: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+.field-group select:disabled, #projectSelect:disabled { background: #f8fafc; color: #94a3b8; cursor: not-allowed; }
 .pat-row { display: flex; gap: 8px; }
 .btn { border: 1px solid transparent; border-radius: 8px; min-height: 36px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; font-size: 11px; font-weight: 750; transition: .16s ease; }
 .btn-primary { color: #fff; background: var(--primary); box-shadow: 0 4px 10px rgba(37,99,235,.16); }
@@ -204,7 +204,6 @@ button { cursor: pointer; }
 
 @media (max-width: 1180px) {
   .connection-grid { grid-template-columns: 1fr 1.3fr 1fr; }
-  .connection-grid .field-group:nth-child(4) { grid-column: span 3; }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .kpi-scope { grid-column: span 2; }
   .substep { grid-template-columns: 1fr; gap: 12px; }
@@ -233,7 +232,6 @@ button { cursor: pointer; }
   .section-heading-row, .content-section-header, .card-header { flex-direction: column; }
   .path-chip { max-width: 100%; }
   .connection-grid { grid-template-columns: 1fr; }
-  .connection-grid .field-group:nth-child(4) { grid-column: auto; }
   .pat-row, .substep-controls, .table-toolbar { flex-direction: column; align-items: stretch; }
   .btn-load, .inspect-btn, .timeframe-field { width: 100%; min-width: 0; }
   .category-strip { align-items: flex-start; flex-direction: column; }

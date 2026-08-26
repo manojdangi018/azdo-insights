@@ -119,7 +119,6 @@ function handleOrgChange() {
   const org = extractOrgName(el('targetOrg').value);
   updatePathPreview(org);
   resetDropdown('projectSelect', '-- Load PAT first --');
-  resetDropdown('categorySelect', '-- Select Project first --');
   el('step5Container').classList.add('hidden');
   updateScope('');
   if (el('chkRememberCreds').checked && org) localStorage.setItem('azdo_org', org);
@@ -159,7 +158,6 @@ async function loadProjectsList() {
       dropdown.appendChild(option);
     });
     enableDropdown('projectSelect');
-    resetDropdown('categorySelect', '-- Select project first --');
     el('step5Container').classList.add('hidden');
     setConnectionStatus(true, 'Connected');
     setStatus(`Connected successfully. ${projects.length.toLocaleString()} project(s) available.`, 'success');
@@ -176,7 +174,6 @@ async function handleProjectSelection() {
   const project = el('projectSelect').value;
   const pat = el('targetPat').value.trim() || sessionStorage.getItem('azdo_pat') || '';
   if (!project) {
-    resetDropdown('categorySelect', '-- Select project first --');
     el('step5Container').classList.add('hidden');
     updatePathPreview(org);
     updateScope('');
@@ -185,16 +182,6 @@ async function handleProjectSelection() {
 
   updatePathPreview(org, project);
   updateScope(project);
-  const category = el('categorySelect');
-  category.innerHTML = `
-    <option value="">-- Choose an analysis --</option>
-    <option value="repositories">Repositories & Branches</option>
-    <option value="user_access">Access & Teams</option>
-    <option value="user_activity">User Activity & Commits</option>
-    <option value="pipelines">Pipelines & Builds</option>
-    <option value="work_items">Work Items & Backlog</option>`;
-  enableDropdown('categorySelect');
-
   try {
     cachedRepos = (await fetchAzDo(`https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis/git/repositories?api-version=${API_VERSION}`, buildAuthHeader(pat))).value || [];
     populateRepoDropdown();
@@ -212,18 +199,18 @@ function selectCategory(category, requireProject = true) {
 
   const project = el('projectSelect')?.value;
   if (requireProject && !project) {
-    el('categorySelect').value = '';
     el('step5Container').classList.add('hidden');
-    return showModal('Select a project first, then choose an analysis category.', 'projectSelect');
+    return showModal('Select a project first, then choose an option from Explore.', 'projectSelect');
   }
-  if (el('categorySelect')) {
-    el('categorySelect').value = category;
-    handleCategorySelection();
-  }
+  renderCategory(category);
 }
 
-function handleCategorySelection() {
-  const category = el('categorySelect').value;
+function handleCategorySelection(category = '') {
+  if (!category) return;
+  renderCategory(category);
+}
+
+function renderCategory(category) {
   const step5 = el('step5Container');
   const sections = ['substepRepo', 'substepAccess', 'substepActivity', 'substepPipelines', 'substepWorkItems'];
   sections.forEach(id => el(id).classList.add('hidden'));
@@ -341,10 +328,7 @@ function renderChart(labels, data, datasetLabel) {
 }
 
 function setSelectedCategory(category) {
-  if (!el('categorySelect')?.disabled) {
-    el('categorySelect').value = category;
-    handleCategorySelection();
-  }
+  selectCategory(category);
 }
 
 document.addEventListener('DOMContentLoaded', initCredentials);
