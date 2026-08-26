@@ -1,12 +1,35 @@
-/* Custom Scrollbars and Table Tweaks */
-table {
-  border-collapse: collapse;
-  width: 100%;
+/* Dark Glassmorphic Theme Overrides */
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-.truncate-cell {
-  max-width: 280px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.tab-btn {
+  color: #94a3b8;
+}
+
+.tab-btn:hover {
+  color: #f8fafc;
+  background-color: rgba(51, 65, 85, 0.4);
+}
+
+.tab-btn.active-tab {
+  color: #ffffff;
+  background-color: #2563eb;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
 }
