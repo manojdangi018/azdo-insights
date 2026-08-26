@@ -1,15 +1,13 @@
 function populateRepoDropdown() {
   const datalist = document.getElementById('repoDatalist');
   datalist.innerHTML = '';
-
-  const allOpt = document.createElement('option');
-  allOpt.value = '-- All Repositories --';
-  datalist.appendChild(allOpt);
-
-  cachedRepos.forEach(r => {
-    const opt = document.createElement('option');
-    opt.value = r.name;
-    datalist.appendChild(opt);
+  const all = document.createElement('option');
+  all.value = '-- All Repositories --';
+  datalist.appendChild(all);
+  cachedRepos.forEach(repo => {
+    const option = document.createElement('option');
+    option.value = repo.name;
+    datalist.appendChild(option);
   });
   document.getElementById('repoSelect').value = '-- All Repositories --';
 }
@@ -18,221 +16,143 @@ async function fetchRepositoryData() {
   const org = extractOrgName(document.getElementById('targetOrg').value);
   const project = document.getElementById('projectSelect').value;
   const rawInput = document.getElementById('repoSelect').value.trim();
-  const pat = document.getElementById('targetPat').value.trim();
+  const pat = document.getElementById('targetPat').value.trim() || sessionStorage.getItem('azdo_pat') || '';
 
-  if (!rawInput) return showModal('Please select or type a repository name.', 'repoSelect');
+  if (!org || !project) return showModal('Select an organization and project first.', 'projectSelect');
+  if (!pat) return showModal('Enter a PAT before inspecting repository data.', 'targetPat');
+  if (!rawInput) return showModal('Select all repositories or type a repository name.', 'repoSelect');
 
-  const authHeader = 'Basic ' + btoa(':' + pat);
+  const authHeader = buildAuthHeader(pat);
   showSection('repositories');
-  setStatus('Fetching branches and PR telemetry across selected repository...', 'info');
+  setStatus('Scanning branches and pull requests. This may take a moment for projects with many branches...', 'info');
 
   let targetRepos = cachedRepos;
   if (rawInput !== '-- All Repositories --' && rawInput !== '__ALL__') {
-    const exactMatches = cachedRepos.filter(r => r.name.toLowerCase() === rawInput.toLowerCase());
-    targetRepos = exactMatches.length > 0 
-      ? exactMatches 
-      : cachedRepos.filter(r => r.name.toLowerCase().includes(rawInput.toLowerCase()));
+    targetRepos = cachedRepos.filter(repo => repo.name.toLowerCase() === rawInput.toLowerCase());
+    if (!targetRepos.length) targetRepos = cachedRepos.filter(repo => repo.name.toLowerCase().includes(rawInput.toLowerCase()));
   }
+  if (!targetRepos.length) return setStatus(`No repository found matching "${rawInput}".`, 'error');
 
-  if (targetRepos.length === 0) {
-    setStatus(`No repository found matching "${rawInput}".`, 'error');
-    return;
-  }
-
-  let repoBranchCounts = {};
-  let allPRs = [];
-  const now = new Date();
+  const branchCounts = {};
+  const allPRs = [];
+  const now = Date.now();
+  const repoResults = [];
 
   try {
-    const repoPromises = targetRepos.map(async (r) => {
-      const refsUrl = `https://dev.azure.com/${org}/${project}/_apis/git/repositories/${r.id}/refs?filter=heads/&api-version=${API_VERSION}`;
-      const prUrl = `https://dev.azure.com/${org}/${project}/_apis/git/repositories/${r.id}/pullrequests?searchCriteria.status=all&$top=100&api-version=${API_VERSION}`;
+    for (const repo of targetRepos) {
+      const refsUrl = `https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repo.id)}/refs?filter=heads/&api-version=${API_VERSION}`;
+      const prUrl = `https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repo.id)}/pullrequests?searchCriteria.status=all&$top=100&api-version=${API_VERSION}`;
+      const [refsResult, prsResult] = await Promise.allSettled([fetchAzDo(refsUrl, authHeader), fetchAzDo(prUrl, authHeader)]);
 
-      const [refsPromise, prsPromise] = await Promise.allSettled([
-        fetchAzDo(refsUrl, authHeader),
-        fetchAzDo(prUrl, authHeader)
-      ]);
+      const refs = refsResult.status === 'fulfilled' ? (refsResult.value.value || []) : [];
+      branchCounts[repo.name] = refs.length;
+      const branchDetails = [];
 
-      let branchDetails = [];
-
-      if (refsPromise.status === 'fulfilled' && refsPromise.value) {
-        const refs = refsPromise.value.value || [];
-        repoBranchCounts[r.name] = refs.length;
-
-        branchDetails = await Promise.all(refs.map(async (ref) => {
-          const bName = ref.name.replace(/^refs\/heads\//, '');
-          const commitUrl = `https://dev.azure.com/${org}/${project}/_apis/git/repositories/${r.id}/commits?searchCriteria.itemVersion.version=${encodeURIComponent(bName)}&searchCriteria.itemVersion.versionType=branch&$top=1&api-version=${API_VERSION}`;
+      // Keep branch commit requests concurrent within each repository.
+      const branchPromises = refs.map(async ref => {
+        const branch = String(ref.name || '').replace(/^refs\/heads\//, '');
+        const commitUrl = `https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis/git/repositories/${encodeURIComponent(repo.id)}/commits?searchCriteria.itemVersion.version=${encodeURIComponent(branch)}&searchCriteria.itemVersion.versionType=branch&$top=1&api-version=${API_VERSION}`;
+        try {
           const commitData = await fetchAzDo(commitUrl, authHeader);
-          const topCommit = (commitData.value && commitData.value[0]) ? commitData.value[0] : null;
+          const commit = commitData.value?.[0] || null;
+          const commitDate = commit?.author?.date ? new Date(commit.author.date) : null;
+          const stale = commitDate ? ((now - commitDate.getTime()) / 86400000) > 90 : false;
+          return { repo: repo.name, branch, author: commit?.author?.name || 'Unknown', date: commitDate ? commitDate.toLocaleString() : 'N/A', isStale: stale, msg: commit?.comment || '' };
+        } catch (_) {
+          return { repo: repo.name, branch, author: 'Unavailable', date: 'N/A', isStale: false, msg: 'Commit details unavailable' };
+        }
+      });
+      branchDetails.push(...await Promise.all(branchPromises));
+      repoResults.push(...branchDetails);
 
-          const commitDate = topCommit?.author?.date ? new Date(topCommit.author.date) : null;
-          const isStale = commitDate ? ((now - commitDate) / (1000 * 60 * 60 * 24)) > 90 : false;
-
-          return {
-            repo: r.name,
-            branch: bName,
-            author: topCommit?.author?.name || 'Unknown',
-            date: commitDate ? commitDate.toLocaleString() : 'N/A',
-            isStale: isStale,
-            msg: topCommit?.comment || ''
-          };
-        }));
-      }
-
-      if (prsPromise.status === 'fulfilled' && prsPromise.value) {
-        const prList = prsPromise.value.value || [];
-        prList.forEach(pr => {
+      if (prsResult.status === 'fulfilled') {
+        (prsResult.value.value || []).forEach(pr => {
           allPRs.push({
-            repo: r.name,
+            repo: repo.name,
             title: pr.title || 'Untitled PR',
-            source: (pr.sourceRefName || '').replace('refs/heads/', ''),
-            target: (pr.targetRefName || '').replace('refs/heads/', ''),
-            creator: pr.createdBy?.displayName || 'Unknown',
+            source: String(pr.sourceRefName || '').replace('refs/heads/', ''),
+            target: String(pr.targetRefName || '').replace('refs/heads/', ''),
+            creator: normalizeDisplayName(pr.createdBy),
             status: pr.status || 'unknown',
             createdDate: pr.creationDate ? new Date(pr.creationDate).toLocaleDateString() : 'N/A'
           });
         });
       }
+    }
 
-      return branchDetails;
-    });
-
-    const results = await Promise.all(repoPromises);
-    rawStore.repos = results.flat();
+    rawStore.repos = repoResults;
     rawStore.repoIndex = 0;
-
     rawStore.repoPrs = allPRs;
     rawStore.repoPrsIndex = 0;
 
-    const activePRsCount = allPRs.filter(p => p.status === 'active').length;
-    const completedPRsCount = allPRs.filter(p => p.status === 'completed').length;
+    const stale = repoResults.filter(branch => branch.isStale).length;
+    const activePRs = allPRs.filter(pr => pr.status === 'active').length;
+    const completedPRs = allPRs.filter(pr => pr.status === 'completed').length;
+    const scope = targetRepos.length === 1 ? targetRepos[0].name : `${targetRepos.length} repositories`;
 
-    document.getElementById('kpi-1-val').textContent = (targetRepos.length > 1) ? `${project} (${targetRepos.length} Repos)` : targetRepos[0]?.name;
-    document.getElementById('kpi-2-label').textContent = 'Total Branches';
-    document.getElementById('kpi-2-val').textContent = rawStore.repos.length;
-    document.getElementById('kpi-3-label').textContent = 'Stale Branches';
-    document.getElementById('kpi-3-val').textContent = rawStore.repos.filter(b => b.isStale).length;
-    document.getElementById('kpi-4-label').textContent = 'Active PRs';
-    document.getElementById('kpi-4-val').textContent = activePRsCount;
-    document.getElementById('kpi-5-label').textContent = 'Completed PRs';
-    document.getElementById('kpi-5-val').textContent = completedPRsCount;
-
+    setKpis(scope, [
+      { label: 'Total branches', value: repoResults.length },
+      { label: 'Stale branches', value: stale },
+      { label: 'Active PRs', value: activePRs },
+      { label: 'Completed PRs', value: completedPRs }
+    ]);
     renderRepoTableBatch(false);
     renderRepoPrsTableBatch(false);
-    renderChart(Object.keys(repoBranchCounts), Object.values(repoBranchCounts), 'Branches per Repository');
-    setStatus(`Loaded ${rawStore.repos.length} branches and ${allPRs.length} pull requests.`, 'success');
+    renderChart(Object.keys(branchCounts), Object.values(branchCounts), 'Branches per repository');
+    setStatus(`Loaded ${repoResults.length.toLocaleString()} branches and ${allPRs.length.toLocaleString()} pull requests.`, 'success');
   } catch (err) {
-    setStatus(`Error fetching branches: ${err.message}`, 'error');
+    setStatus(`Repository scan failed: ${err.message}`, 'error');
   }
 }
 
 function renderRepoTableBatch(append = false) {
   const tbody = document.getElementById('branchesTableBody');
   const container = document.getElementById('seeMoreRepoContainer');
-  const remainingEl = document.getElementById('repoRemainingCount');
-
+  const remaining = document.getElementById('repoRemainingCount');
   if (!append) tbody.innerHTML = '';
-
-  if (rawStore.repos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">No branches found.</td></tr>`;
+  if (!rawStore.repos.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No branch data found.</td></tr>';
     container.classList.add('hidden');
     return;
   }
-
-  const nextBatch = rawStore.repos.slice(rawStore.repoIndex, rawStore.repoIndex + PAGE_SIZE);
-  rawStore.repoIndex += nextBatch.length;
-
-  const html = nextBatch.map(b => `
-    <tr class="hover:bg-slate-50 transition">
-      <td class="p-4 font-semibold text-slate-900">${b.repo}</td>
-      <td class="p-4"><span class="font-mono text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-semibold">${b.branch}</span></td>
-      <td class="p-4">${b.isStale 
-        ? '<span class="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-semibold">Stale</span>' 
-        : '<span class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-semibold">Active</span>'}
-      </td>
-      <td class="p-4 text-xs font-medium">${b.author}</td>
-      <td class="p-4 text-xs text-slate-500">${b.date}</td>
-      <td class="p-4 text-xs text-slate-600 max-w-xs truncate">${b.msg}</td>
-    </tr>
-  `).join('');
-
-  tbody.insertAdjacentHTML('beforeend', html);
-
-  const remaining = rawStore.repos.length - rawStore.repoIndex;
-  if (remaining > 0) {
-    container.classList.remove('hidden');
-    remainingEl.textContent = remaining;
-  } else {
-    container.classList.add('hidden');
-  }
+  const batch = rawStore.repos.slice(rawStore.repoIndex, rawStore.repoIndex + PAGE_SIZE);
+  rawStore.repoIndex += batch.length;
+  tbody.insertAdjacentHTML('beforeend', batch.map(branch => `
+    <tr>
+      <td><strong class="text-slate-900">${escapeHtml(branch.repo)}</strong></td>
+      <td><span class="font-mono text-[10px] text-blue-700 bg-blue-50 px-2 py-1 rounded">${escapeHtml(branch.branch)}</span></td>
+      <td><span class="status-pill ${branch.isStale ? 'warning' : 'success'}">${branch.isStale ? 'Stale' : 'Active'}</span></td>
+      <td>${escapeHtml(branch.author)}</td><td>${escapeHtml(branch.date)}</td>
+      <td class="max-w-[360px] truncate" title="${escapeHtml(branch.msg)}">${escapeHtml(branch.msg || '—')}</td>
+    </tr>`).join(''));
+  const count = rawStore.repos.length - rawStore.repoIndex;
+  remaining.textContent = count.toLocaleString();
+  container.classList.toggle('hidden', count <= 0);
 }
 
 function renderRepoPrsTableBatch(append = false) {
   const tbody = document.getElementById('repoPrsTableBody');
   const container = document.getElementById('seeMoreRepoPrsContainer');
-  const remainingEl = document.getElementById('repoPrsRemainingCount');
-
+  const remaining = document.getElementById('repoPrsRemainingCount');
   if (!append) tbody.innerHTML = '';
-
-  if (rawStore.repoPrs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">No pull requests found.</td></tr>`;
+  if (!rawStore.repoPrs.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No pull requests found.</td></tr>';
     container.classList.add('hidden');
     return;
   }
-
-  const nextBatch = rawStore.repoPrs.slice(rawStore.repoPrsIndex, rawStore.repoPrsIndex + PAGE_SIZE);
-  rawStore.repoPrsIndex += nextBatch.length;
-
-  const html = nextBatch.map(pr => `
-    <tr class="hover:bg-slate-50 transition">
-      <td class="p-4 font-semibold text-slate-900">${pr.repo}</td>
-      <td class="p-4 font-medium text-slate-800 max-w-xs truncate">${pr.title}</td>
-      <td class="p-4 font-mono text-xs text-slate-500">${pr.source} &rarr; ${pr.target}</td>
-      <td class="p-4 text-xs font-medium text-slate-700">${pr.creator}</td>
-      <td class="p-4">
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${
-          pr.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
-          pr.status === 'active' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'
-        }">${pr.status}</span>
-      </td>
-      <td class="p-4 text-xs text-slate-500">${pr.createdDate}</td>
-    </tr>
-  `).join('');
-
-  tbody.insertAdjacentHTML('beforeend', html);
-
-  const remaining = rawStore.repoPrs.length - rawStore.repoPrsIndex;
-  if (remaining > 0) {
-    container.classList.remove('hidden');
-    remainingEl.textContent = remaining;
-  } else {
-    container.classList.add('hidden');
-  }
+  const batch = rawStore.repoPrs.slice(rawStore.repoPrsIndex, rawStore.repoPrsIndex + PAGE_SIZE);
+  rawStore.repoPrsIndex += batch.length;
+  tbody.insertAdjacentHTML('beforeend', batch.map(pr => `
+    <tr><td><strong class="text-slate-900">${escapeHtml(pr.repo)}</strong></td><td class="max-w-[300px] truncate" title="${escapeHtml(pr.title)}">${escapeHtml(pr.title)}</td><td class="font-mono text-[10px]">${escapeHtml(pr.source)} → ${escapeHtml(pr.target)}</td><td>${escapeHtml(pr.creator)}</td><td><span class="status-pill ${statusClass(pr.status)}">${escapeHtml(pr.status)}</span></td><td>${escapeHtml(pr.createdDate)}</td></tr>`).join(''));
+  const count = rawStore.repoPrs.length - rawStore.repoPrsIndex;
+  remaining.textContent = count.toLocaleString();
+  container.classList.toggle('hidden', count <= 0);
 }
 
 function exportBranchesToXLSX() {
-  if (!rawStore.repos || rawStore.repos.length === 0) return;
-  const data = rawStore.repos.map(b => ({
-    "Repository": b.repo,
-    "Branch Name": b.branch,
-    "Status / Health": b.isStale ? "Stale" : "Active",
-    "Last Author": b.author,
-    "Last Commit Date": b.date,
-    "Commit Message": b.msg
-  }));
-  exportToExcelFile({ "Branches": data }, "AzureDevOps_Branches");
+  exportToExcelFile({ Branches: rawStore.repos.map(branch => ({ Repository: branch.repo, 'Branch Name': branch.branch, Health: branch.isStale ? 'Stale' : 'Active', 'Last Author': branch.author, 'Last Commit Date': branch.date, 'Commit Message': branch.msg })) }, 'AzureDevOps_Branches');
 }
 
 function exportRepoPrsToXLSX() {
-  if (!rawStore.repoPrs || rawStore.repoPrs.length === 0) return;
-  const data = rawStore.repoPrs.map(p => ({
-    "Repository": p.repo,
-    "PR Title": p.title,
-    "Source Branch": p.source,
-    "Target Branch": p.target,
-    "Creator": p.creator,
-    "Status": p.status,
-    "Created Date": p.createdDate
-  }));
-  exportToExcelFile({ "Pull Requests": data }, "AzureDevOps_PullRequests");
+  exportToExcelFile({ 'Pull Requests': rawStore.repoPrs.map(pr => ({ Repository: pr.repo, 'PR Title': pr.title, 'Source Branch': pr.source, 'Target Branch': pr.target, Creator: pr.creator, Status: pr.status, 'Created Date': pr.createdDate })) }, 'AzureDevOps_PullRequests');
 }
