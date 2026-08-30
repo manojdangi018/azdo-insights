@@ -132,27 +132,63 @@ Got it
 <nav class="sidebar-nav">
 <!-- Function: selectExplore() opens the Repositories workspace view. -->
 <button class="sidebar-item active" data-view="repositories" onclick="selectExplore('repositories')">
-<span class="nav-icon">⌂</span><span>Repositories</span>
+<span class="nav-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.5 7.5h6l2 2h9v9.5a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2v-9.5a2 2 0 0 1 2-2Z"/>
+<path d="M3.5 7.5V5a2 2 0 0 1 2-2h4l2 2h3"/>
+</svg>
+</span><span>Repositories</span>
 </button>
 <!-- Function: selectExplore() opens the Pipelines & Builds workspace view. -->
 <button class="sidebar-item" data-view="pipelines" onclick="selectExplore('pipelines')">
-<span class="nav-icon">↗</span><span>Pipelines &amp; Builds</span>
+<span class="nav-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="6" cy="6" r="2.5"/>
+<circle cx="18" cy="18" r="2.5"/>
+<path d="M8.5 6h3a6.5 6.5 0 0 1 6.5 6.5V15"/>
+<path d="M16 15l2 3 3-2"/>
+</svg>
+</span><span>Pipelines &amp; Builds</span>
 </button>
 <!-- Function: selectExplore() opens the Service Connections & Agents workspace view. -->
 <button class="sidebar-item" data-view="serviceagents" onclick="selectExplore('service_agents')">
-<span class="nav-icon">⚙</span><span>Service Connections &amp; Agents</span>
+<span class="nav-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M12 3.5l1.1 1.9a7.2 7.2 0 0 1 2.1.9l2.1-.5 1.8 1.8-.5 2.1c.4.6.7 1.3.9 2.1l1.9 1.1v2.6l-1.9 1.1a7.2 7.2 0 0 1-.9 2.1l.5 2.1-1.8 1.8-2.1-.5a7.2 7.2 0 0 1-2.1.9L12 22h-2.6l-1.1-1.9a7.2 7.2 0 0 1-2.1-.9l-2.1.5-1.8-1.8.5-2.1a7.2 7.2 0 0 1-.9-2.1L2 12.6V10l1.9-1.1a7.2 7.2 0 0 1 .9-2.1l-.5-2.1 1.8-1.8 2.1.5a7.2 7.2 0 0 1 2.1-.9L9.4 3.5H12Z"/>
+<circle cx="10.7" cy="11.3" r="2.8"/>
+</svg>
+</span><span>Service Connections &amp; Agents</span>
 </button>
 <!-- Function: selectExplore() opens the Work Items workspace view. -->
 <button class="sidebar-item" data-view="workitems" onclick="selectExplore('work_items')">
-<span class="nav-icon">✓</span><span>Work Items</span>
+<span class="nav-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<rect x="5" y="3.5" width="14" height="17" rx="2"/>
+<path d="M9 3.5h6v3H9z"/>
+<path d="M8.5 11h7M8.5 15h5"/>
+</svg>
+</span><span>Work Items</span>
 </button>
 <!-- Function: selectExplore() opens the User Activity workspace view. -->
 <button class="sidebar-item" data-view="activity" onclick="selectExplore('user_activity')">
-<span class="nav-icon">○</span><span>User Activity</span>
+<span class="nav-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="12" cy="8" r="3.2"/>
+<path d="M5.5 20c.8-3.3 3.1-5 6.5-5s5.7 1.7 6.5 5"/>
+<path d="M18.5 4.5l1.5 1.5-1.5 1.5"/>
+</svg>
+</span><span>User Activity</span>
 </button>
 <!-- Function: selectExplore() opens the Access & Teams workspace view. -->
 <button class="sidebar-item" data-view="access" onclick="selectExplore('user_access')">
-<span class="nav-icon">⌁</span><span>Access &amp; Teams</span>
+<span class="nav-icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="9" cy="8" r="3"/>
+<path d="M3.5 20c.7-3.2 2.5-5 5.5-5s4.8 1.8 5.5 5"/>
+<path d="M16 11a3 3 0 1 0 0-6"/>
+<path d="M16 15c2.2.1 3.7 1.7 4.5 5"/>
+</svg>
+</span><span>Access &amp; Teams</span>
 </button>
 </nav>
 
