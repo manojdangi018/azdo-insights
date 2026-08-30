@@ -204,125 +204,138 @@ Got it
 <select id="categorySelect" class="hidden"><option value="">-- Choose Category --</option></select>
 
 <!-- Dynamic Sub-Step Container -->
-<div id="step5Container" class="hidden mt-5 pt-3 border-t border-slate-200">
+        <div id="step5Container" class="hidden mt-5 pt-3 border-t border-slate-700/50">
 
-<!-- Step 5A: Repositories -->
-<div id="substepRepo" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
-<div>
-<label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
-SELECT OR TYPE REPOSITORY <span class="text-red-500">*</span>
-</label>
-<div class="flex gap-2">
-<input list="repoDatalist" id="repoSelect" 
-placeholder="Type or select repository..." 
-onfocus="this.value=''"
-onblur="if(!this.value) this.value='-- All Repositories --'"
-class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
-<datalist id="repoDatalist"></datalist>
-<button onclick="fetchRepositoryData()" class="text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition flex-shrink-0">
-Inspect
-</button>
-</div>
-</div>
-<div class="text-xs text-slate-500 pb-2">
-Select <strong>"-- All Repositories --"</strong> or type an individual repository to scan branches and commit health.
-</div>
-</div>
+          <!-- Step 5A: Repositories -->
+          <div id="substepRepo" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                SELECT OR TYPE REPOSITORY <span class="text-red-400">*</span>
+              </label>
+              <div class="flex gap-2">
+                <input list="repoDatalist" id="repoSelect" 
+                  placeholder="Type or select repository..." 
+                  onfocus="this.value=''"
+                  onblur="if(!this.value) this.value='-- All Repositories --'"
+                  class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                <datalist id="repoDatalist"></datalist>
+                <button onclick="fetchRepositoryData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Inspect
+                </button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400 pb-2">
+              Select <strong>"-- All Repositories --"</strong> or type an individual repository to scan branches and commit health.
+            </div>
+          </div>
 
-<!-- Step 5B: User Access -->
-<div id="substepAccess" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
-<div class="md:col-span-2">
-<label class="block text-[11px] font-semibold text-blue-900 mb-1">
-5. USER ID / EMAIL / DISPLAY NAME <span class="text-slate-400 font-normal">(Leave blank to fetch all project users)</span>
-</label>
-<input type="text" id="targetAccessUserQuery" 
-placeholder="e.g. user@domain.com or First Last" 
-class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-</div>
-<div>
-<button onclick="fetchUserAccessData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
-Fetch User Access
-</button>
-</div>
-</div>
+          <!-- Step 5B: User Access -->
+          <div id="substepAccess" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                USER ID / EMAIL / DISPLAY NAME <span class="font-normal" style="color: #8ea8cf;">(Optional)</span>
+              </label>
+              <div class="flex gap-2">
+                <input type="text" id="targetAccessUserQuery" 
+                  placeholder="e.g. user@domain.com or First Last" 
+                  class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                <button onclick="fetchUserAccessData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Fetch Access
+                </button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400 pb-2">
+              Leave blank to scan <strong>all project users</strong>, or specify an email/name to filter security roles.
+            </div>
+          </div>
 
-<!-- Step 5C: User Activity -->
-<div id="substepActivity" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
-<div>
-<label class="block text-[11px] font-semibold text-blue-900 mb-1">
-5. USER EMAIL / ID <span class="text-red-500">*</span>
-</label>
-<input type="text" id="targetUserQuery" 
-placeholder="e.g. user@domain.com or First Last" 
-class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-</div>
-<div>
-<label class="block text-[11px] font-semibold text-blue-900 mb-1">TIMEFRAME</label>
-<select id="userTimeframeDays" class="w-full text-xs border border-blue-300 rounded-md px-2 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
-<option value="30">Last 30 Days</option>
-<option value="90">Last 90 Days</option>
-<option value="180">Last 6 Months</option>
-<option value="365" selected>Last 1 Year</option>
-<option value="0">All Time</option>
-</select>
-</div>
-<div>
-<button onclick="fetchUserActivityData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
-Search User Activity
-</button>
-</div>
-</div>
+          <!-- Step 5C: User Activity -->
+          <div id="substepActivity" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                USER EMAIL / ID <span class="text-red-400">*</span>
+              </label>
+              <div class="flex gap-2">
+                <input type="text" id="targetUserQuery" 
+                  placeholder="e.g. user@domain.com or First Last" 
+                  class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                <select id="userTimeframeDays" class="text-xs border border-blue-300 rounded-md px-2 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium flex-shrink-0">
+                  <option value="30">Last 30 Days</option>
+                  <option value="90">Last 90 Days</option>
+                  <option value="180">Last 6 Months</option>
+                  <option value="365" selected>Last 1 Year</option>
+                  <option value="0">All Time</option>
+                </select>
+                <button onclick="fetchUserActivityData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Search
+                </button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400 pb-2">
+              Enter a contributor's <strong>Azure DevOps email</strong> or user principal to retrieve commit telemetry.
+            </div>
+          </div>
 
-<!-- Step 5D: Pipelines -->
-<div id="substepPipelines" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
-<div class="md:col-span-2">
-<label class="block text-[11px] font-semibold text-blue-900 mb-1">
-RUNS PER PIPELINE TO SCAN
-</label>
-<select id="pipelineRunsTop" class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
-<option value="20" selected>Latest 20 Runs per Pipeline</option>
-<option value="50">Latest 50 Runs per Pipeline</option>
-<option value="100">Latest 100 Runs per Pipeline</option>
-</select>
-</div>
-<div>
-<button onclick="fetchPipelineData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
-Fetch Pipeline Runs
-</button>
-</div>
-</div>
+          <!-- Step 5D: Pipelines -->
+          <div id="substepPipelines" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                RUNS PER PIPELINE TO SCAN <span class="text-red-400">*</span>
+              </label>
+              <div class="flex gap-2">
+                <select id="pipelineRunsTop" class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium">
+                  <option value="20" selected>Latest 20 Runs per Pipeline</option>
+                  <option value="50">Latest 50 Runs per Pipeline</option>
+                  <option value="100">Latest 100 Runs per Pipeline</option>
+                </select>
+                <button onclick="fetchPipelineData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Fetch Pipelines
+                </button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400 pb-2">
+              Scans all build definitions in the project to calculate CI pass rates and trigger breakdowns.
+            </div>
+          </div>
 
-<!-- Step 5E: Service Connections & Agents -->
-<div id="substepServiceAgents" class="hidden service-agents-filter bg-blue-50/50 p-3 rounded-md">
-<div class="service-agents-filter-row service-agents-project-row">
-<div>
-<div class="text-[11px] font-semibold text-blue-900">SERVICE CONNECTIONS &amp; AGENT POOLS</div>
-<div id="serviceAgentsScopeText" class="text-[11px] text-slate-500 mt-1">Select a project above for project-level information, or leave Project blank for organization-wide information.</div>
-</div>
-<button onclick="fetchServiceConnectionAgentData()" class="service-agents-fetch-btn text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition">
-Fetch Connections &amp; Agents
-</button>
-</div>
-</div>
+          <!-- Step 5E: Service Connections & Agents -->
+          <div id="substepServiceAgents" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                SERVICE CONNECTIONS &amp; AGENT POOLS
+              </label>
+              <div class="flex gap-2">
+                <button onclick="fetchServiceConnectionAgentData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Fetch Connections &amp; Agents
+                </button>
+              </div>
+            </div>
+            <div id="serviceAgentsScopeText" class="text-xs text-slate-400 pb-2">
+              Select a project above for project-level information, or leave blank for organization-wide information.
+            </div>
+          </div>
 
-<!-- Step 5F: Work Items -->
-<div id="substepWorkItems" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
-<div class="md:col-span-2">
-<label class="block text-[11px] font-semibold text-blue-900 mb-1">
-ASSIGNED USER EMAIL / NAME <span class="text-slate-400 font-normal">(Leave blank to query all active work items)</span>
-</label>
-<input type="text" id="targetWorkItemUser" 
-placeholder="e.g. user@domain.com or First Last" 
-class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-</div>
-<div>
-<button onclick="fetchWorkItemsData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
-Query Work Items
-</button>
-</div>
-</div>
+          <!-- Step 5F: Work Items -->
+          <div id="substepWorkItems" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                ASSIGNED USER EMAIL / NAME <span class="font-normal" style="color: #8ea8cf;">(Optional)</span>
+              </label>
+              <div class="flex gap-2">
+                <input type="text" id="targetWorkItemUser" 
+                  placeholder="e.g. user@domain.com or First Last" 
+                  class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                <button onclick="fetchWorkItemsData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Query Backlog
+                </button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-400 pb-2">
+              Leave blank to query <strong>all active work items</strong>, or filter by a specific assignee name.
+            </div>
+          </div>
 
-</div>
+        </div>
 
 <div id="statusBar" class="status-bar hidden"></div>
 <div class="active-path-row"><span>Active Azure DevOps Path:</span><a id="activePathLink" href="javascript:void(0)">https://dev.azure.com/</a></div>
