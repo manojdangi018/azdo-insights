@@ -1030,3 +1030,21 @@ Purpose: Main dark card containing project selection and service controls.
   cursor: wait !important;
   opacity: 0.75;
 }
+
+#step5Container > div {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+#step5Container label {
+  color: #c9d8ee !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+#step5Container select,
+#step5Container input {
+  height: 34px !important;
+  color: #1e293b !important;
+}
