@@ -115,7 +115,6 @@ function restoreWorkspaceDisplayState(category) {
   const state = workspaceDisplayStore[category];
   if (!state) {
     setWorkspaceDefaultKpis(category);
-    // Reset chart data when switching to an un-scanned workspace
     if (typeof renderChart === 'function') {
       renderChart([], [], 'Overview');
     }
@@ -291,7 +290,6 @@ async function loadProjectsList() {
   }
 
   const authHeader = 'Basic ' + btoa(':' + pat);
-  setStatus(`Loading projects from https://dev.azure.com/${org}...`, 'info');
 
   try {
     const url = `https://dev.azure.com/${org}/_apis/projects?api-version=${API_VERSION}&$top=500`;
@@ -318,8 +316,12 @@ async function loadProjectsList() {
     
     setConnectionBadge(true);
     showWorkspacePage();
-    
-    setStatus(`Loaded ${projects.length} projects successfully! Please choose a project.`, 'success');
+
+    const statusEl = document.getElementById('statusBar');
+    if (statusEl) {
+      statusEl.classList.add('hidden');
+      statusEl.textContent = '';
+    }
   } catch (err) {
     setStatus(`Error loading projects: ${err.message}`, 'error');
     setConnectionBadge(false);
@@ -377,6 +379,12 @@ async function handleProjectSelection() {
   const project = document.getElementById('projectSelect').value;
   const pat = document.getElementById('targetPat').value.trim();
   updateProjectRequirementUI();
+
+  const statusEl = document.getElementById('statusBar');
+  if (statusEl) {
+    statusEl.classList.add('hidden');
+    statusEl.textContent = '';
+  }
 
   if (!project) {
     if (activeCategory === 'service_agents') {
@@ -485,6 +493,12 @@ function selectExplore(category) {
   renderActiveSubstep();
 
   restoreWorkspaceDisplayState(category);
+
+  const statusEl = document.getElementById('statusBar');
+  if (statusEl) {
+    statusEl.classList.add('hidden');
+    statusEl.textContent = '';
+  }
 }
 
 function setConnectionBadge(connected) {
@@ -561,7 +575,6 @@ function disconnectSession() {
   sessionStorage.removeItem('azdo_session_project');
   sessionStorage.removeItem('azdo_session_category');
 
-  // Reset Load Projects button state
   const loadBtn = document.getElementById('btnLoadProjects');
   if (loadBtn) {
     loadBtn.disabled = false;
@@ -569,7 +582,6 @@ function disconnectSession() {
     loadBtn.classList.remove('loading');
   }
 
-  // Remove the HTML page-restore class so Page 1 displays cleanly
   document.documentElement.classList.remove('restore-workspace-page');
   
   showConnectionPage();
