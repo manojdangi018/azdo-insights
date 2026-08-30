@@ -35,7 +35,7 @@ let rawStore = {
 
 /* ============================================================
    WORKSPACE DISPLAY STATE
-   Purpose: Keep each workspace's loaded KPI/chart display separate.
+   Purpose: Keep each workspace's loaded KPI/chart/status separate.
    This does NOT clear or refetch rawStore data when switching.
    ============================================================ */
 let workspaceDisplayStore = {};
@@ -77,8 +77,12 @@ function saveWorkspaceDisplayState(category) {
     }
   }
 
+  const statusBarEl = document.getElementById('statusBar');
+  const statusMsg = statusBarEl && !statusBarEl.classList.contains('hidden') ? statusBarEl.textContent : '';
+
   workspaceDisplayStore[category] = {
     kpis,
+    statusMsg,
     chart: {
       labels: Array.isArray(currentChartData?.labels) ? [...currentChartData.labels] : [],
       values: Array.isArray(currentChartData?.values) ? [...currentChartData.values] : [],
@@ -113,8 +117,10 @@ function setWorkspaceDefaultKpis(category) {
 
 function restoreWorkspaceDisplayState(category) {
   const state = workspaceDisplayStore[category];
+  
   if (!state) {
     setWorkspaceDefaultKpis(category);
+    setStatus('');
     if (typeof renderChart === 'function') {
       renderChart([], [], 'Overview');
     }
@@ -130,6 +136,12 @@ function restoreWorkspaceDisplayState(category) {
       value.textContent = item.value;
       value.className = item.className;
     }
+  }
+
+  if (state.statusMsg) {
+    setStatus(state.statusMsg, 'success');
+  } else {
+    setStatus('');
   }
 
   if (state.chart) {
@@ -394,7 +406,7 @@ async function handleProjectSelection() {
   const pat = document.getElementById('targetPat').value.trim();
   updateProjectRequirementUI();
 
-  // Clear the Page 1 "Loaded X projects" status text on Page 2
+  // Clear workspace status message when project is selected
   setStatus('');
 
   if (!project) {
@@ -503,11 +515,6 @@ function selectExplore(category) {
   renderActiveSubstep();
 
   restoreWorkspaceDisplayState(category);
-
-  // Clear workspace status until an action button is triggered
-  if (!workspaceHasData(category)) {
-    setStatus('');
-  }
 }
 
 function setConnectionBadge(connected) {
