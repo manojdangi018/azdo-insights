@@ -261,7 +261,6 @@ function enableDropdown(id) {
   el.disabled = false;
   el.classList.remove('bg-slate-100', 'cursor-not-allowed');
   el.classList.add('bg-white');
-  el.classList.remove('bg-white');
 }
 
 async function loadProjectsList() {
@@ -272,7 +271,6 @@ async function loadProjectsList() {
   if (!pat) return showModal('Please enter your Personal Access Token (PAT).', 'targetPat');
 
   const loadBtn = document.getElementById('btnLoadProjects');
-   
   if (loadBtn) {
     loadBtn.disabled = true;
     loadBtn.textContent = 'Loading projects...';
@@ -317,6 +315,12 @@ async function loadProjectsList() {
   } catch (err) {
     setStatus(`Error loading projects: ${err.message}`, 'error');
     setConnectionBadge(false);
+  } finally {
+    if (loadBtn) {
+      loadBtn.disabled = false;
+      loadBtn.textContent = 'Load projects';
+      loadBtn.classList.remove('loading');
+    }
   }
 }
 
@@ -548,6 +552,17 @@ function disconnectSession() {
   sessionStorage.removeItem('azdo_session_pat');
   sessionStorage.removeItem('azdo_session_project');
   sessionStorage.removeItem('azdo_session_category');
+
+  // Reset Load Projects button state
+  const loadBtn = document.getElementById('btnLoadProjects');
+  if (loadBtn) {
+    loadBtn.disabled = false;
+    loadBtn.textContent = 'Load projects';
+    loadBtn.classList.remove('loading');
+  }
+
+  // Remove the HTML page-restore class so Page 1 displays cleanly
+  document.documentElement.classList.remove('restore-workspace-page');
   
   showConnectionPage();
   setStatus('Disconnected from Azure DevOps. Enter credentials to connect again.', 'info');
