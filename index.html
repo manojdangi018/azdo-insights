@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Azure DevOps Multi-View Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
+
+  <!-- ============================================================
+       CODE MAP — HTML FUNCTIONALITY ORDER
+       1. Validation modal
+       2. Azure DevOps connection / landing page
+       3. Workspace sidebar navigation
+       4. Project selection and Step 5 controls
+       5. KPI summary and activity chart
+       6. Repository / Access / Activity / Pipeline views
+       7. Service Connections & Agents / Work Items views
+       8. Modular JavaScript files loaded at the bottom
+       Note: Existing markup and event handlers are preserved.
+       ============================================================ -->
+
+
+  <!-- Step Validation Modal -->
+  <div id="validationModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex items-center gap-3 text-amber-600 mb-3">
+        <svg class="w-6 h-6 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <h3 class="text-base font-bold text-slate-900">Input Required</h3>
+      </div>
+      <p id="modalMessage" class="text-xs text-slate-600 mb-5 leading-relaxed"></p>
+      <div class="flex justify-end">
+  <!-- Function: closeModal() closes the input validation message. -->
+        <button onclick="closeModal()" class="text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+          Got it
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Landing / Azure DevOps connection page -->
+  <div id="connectionPage" class="connection-page">
+    <header class="landing-topbar">
+      <div class="landing-brand">
+        <div class="brand-mark"><img src="devops-ad-logo.png" alt="DevOps Intelligence logo"></div>
+        <div><div class="brand-title">DevOps Intelligence</div><div class="brand-subtitle">Azure DevOps analytics</div></div>
+      </div>
+      <div class="landing-step">01 · CONNECTION</div>
+    </header>
+    <main class="connection-main">
+      <section class="landing-hero-copy" aria-label="Azure DevOps Intelligence Hub overview">
+        <h1>Azure DevOps</h1>
+        <h2>Intelligence Hub</h2>
+        <p class="landing-hero-description">Unified visibility across your Azure DevOps organization</p>
+        <div class="landing-hero-divider" aria-hidden="true"></div>
+        <ul class="landing-hero-features">
+          <li><span aria-hidden="true">⌁</span><span>Repository Insights</span></li>
+          <li><span aria-hidden="true">◆</span><span>Pipeline &amp; Build Analytics</span></li>
+          <li><span aria-hidden="true">♢</span><span>Security &amp; Compliance</span></li>
+          <li><span aria-hidden="true">♙</span><span>Access &amp; Team Management</span></li>
+          <li><span aria-hidden="true">▣</span><span>Work Item Intelligence</span></li>
+          <li><span aria-hidden="true">▤</span><span>Agent &amp; Service Connections</span></li>
+        </ul>
+      </section>
+
+      <section class="connection-card landing-connection-card">
+        <div class="connection-card-head">
+          <div>
+            <div class="eyebrow">01 · CONNECTION</div>
+            <h2>Connect to Azure DevOps</h2>
+            <p>Enter your organization and PAT, then select a project to explore telemetry.</p>
+          </div>
+          <a id="generatedUrlLink" href="javascript:void(0)" class="path-preview">https://dev.azure.com/</a>
+        </div>
+
+        <!-- Project Load / Connection Section -->
+        <div class="connection-fields">
+          <div class="field-group">
+  <!-- Field: Organization name or Azure DevOps organization URL. -->
+            <label>Organization <span>*</span></label>
+  <!-- Function: handleOrgChange() updates the organization URL preview while typing. -->
+            <input type="text" id="targetOrg" autocomplete="off" oninput="handleOrgChange()" placeholder="e.g. https://dev.azure.com/XYZ">
+            <small>Organization name or https://dev.azure.com/&lt;org&gt;</small>
+          </div>
+
+          <div class="field-group">
+  <!-- Field: Personal Access Token used for Azure DevOps API calls. -->
+            <label>Personal Access Token <span>*</span></label>
+            <input type="password" id="targetPat" placeholder="Enter PAT token">
+            <small>PAT is used only from this browser session to call Azure DevOps APIs.</small>
+          </div>
+
+          <div class="flex flex-col gap-2.5">
+  <!-- Function: loadProjectsList() loads available Azure DevOps projects. -->
+            <button id="btnLoadProjects" onclick="loadProjectsList()" class="btn-load-projects">Load projects</button>
+            <label class="remember-toggle">
+  <!-- Function: toggleRememberCreds() controls whether connection details are remembered. -->
+              <input type="checkbox" id="chkRememberCreds" onchange="toggleRememberCreds()">
+              <span>Remember organization &amp; credentials</span>
+            </label>
+          </div>
+
+
+        </div>
+      </section>
+
+        <div id="landingStatusBar" class="status-bar hidden"></div>
+    </main>
+  </div>
+
+  <!-- Workspace / Azure DevOps intelligence page -->
+  <div id="workspacePage" class="workspace-page hidden">
+  <!-- Application Sidebar -->
+  <aside class="app-sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark"><img src="devops-ad-logo.png" alt="DevOps Intelligence logo"></div>
+      <div>
+        <div class="brand-title">DevOps Intelligence</div>
+        <div class="brand-subtitle">Azure DevOps analytics</div>
+      </div>
+    </div>
+
+    <div class="sidebar-section-label">WORKSPACE</div>
+
+    <nav class="sidebar-nav">
+  <!-- Function: selectExplore() opens the Repositories workspace view. -->
+      <button class="sidebar-item active" data-view="repositories" onclick="selectExplore('repositories')">
+        <span class="nav-icon">⌂</span><span>Repositories</span>
+      </button>
+  <!-- Function: selectExplore() opens the Pipelines & Builds workspace view. -->
+      <button class="sidebar-item" data-view="pipelines" onclick="selectExplore('pipelines')">
+        <span class="nav-icon">↗</span><span>Pipelines &amp; Builds</span>
+      </button>
+  <!-- Function: selectExplore() opens the Service Connections & Agents workspace view. -->
+      <button class="sidebar-item" data-view="serviceagents" onclick="selectExplore('service_agents')">
+        <span class="nav-icon">⚙</span><span>Service Connections &amp; Agents</span>
+      </button>
+  <!-- Function: selectExplore() opens the Work Items workspace view. -->
+      <button class="sidebar-item" data-view="workitems" onclick="selectExplore('work_items')">
+        <span class="nav-icon">✓</span><span>Work Items</span>
+      </button>
+  <!-- Function: selectExplore() opens the User Activity workspace view. -->
+      <button class="sidebar-item" data-view="activity" onclick="selectExplore('user_activity')">
+        <span class="nav-icon">○</span><span>User Activity</span>
+      </button>
+  <!-- Function: selectExplore() opens the Access & Teams workspace view. -->
+      <button class="sidebar-item" data-view="access" onclick="selectExplore('user_access')">
+        <span class="nav-icon">⌁</span><span>Access &amp; Teams</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-connection-note">
+      <div class="connection-note-title"><span class="status-dot"></span> Client-side connection</div>
+      <div class="connection-note-text">PAT is sent directly to Azure DevOps from this browser session.</div>
+    </div>
+  </aside>
+
+  <!-- Main application shell -->
+  <div class="app-shell">
+    <header class="app-topbar">
+      <div>
+        <h1 class="app-title">Azure DevOps Intelligence Hub</h1>
+        <p class="app-subtitle">Repository, pipeline, work item, security and user activity insights</p>
+      </div>
+      <div class="topbar-actions">
+        <span id="connectionBadge" class="connection-badge"><span class="status-dot"></span><span id="connectionBadgeText">Ready to connect</span></span>
+  <!-- Function: disconnectSession() ends the current Azure DevOps session. -->
+        <button id="btnDisconnect" onclick="disconnectSession()" class="btn-disconnect hidden">
+          <span>✕</span><span>Disconnect</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="dashboard-main">
+      <section class="workspace-controls">
+        <div class="project-selection-box">
+          <div class="workspace-project-header">
+            <div class="eyebrow">02 · PROJECT</div>
+  <!-- Function: switchToOrganizationServiceAgents() changes Service Connections & Agents to organization scope. -->
+            <button id="btnSwitchOrgView" type="button" class="btn-switch-org" onclick="switchToOrganizationServiceAgents()" title="Switch to organization-level Service Connections & Agent Pools">↔ Switch Org. View</button>
+          </div>
+          <div class="workspace-project-field">
+  <!-- Field: Project selector used to choose the active Azure DevOps project. -->
+            <label for="projectSelect">Project <span id="projectRequiredMark" aria-hidden="true">*</span></label>
+  <!-- Function: handleProjectSelection() loads data for the selected project. -->
+            <select id="projectSelect" disabled onchange="handleProjectSelection()"><option value="">-- Load PAT first --</option></select>
+            <div id="projectRequirementText" class="project-requirement-text">Project selection is required for Repositories, Access &amp; Teams, User Activity, Pipelines &amp; Builds, and Work Items.</div>
+          </div>
+        </div>
+  <!-- Field: Internal category selector used by the workspace view logic. -->
+        <select id="categorySelect" class="hidden"><option value="">-- Choose Category --</option></select>
+        <!-- Dynamic Sub-Step Container -->
+        <div id="step5Container" class="hidden mt-5 pt-3 border-t border-slate-200">
+          
+          <!-- Step 5A: Repositories -->
+          <div id="substepRepo" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                SELECT OR TYPE REPOSITORY <span class="text-red-500">*</span>
+              </label>
+              <div class="flex gap-2">
+  <!-- Field: Repository name used to inspect one repository or all repositories. -->
+                <input list="repoDatalist" id="repoSelect" 
+                       placeholder="Type or select repository..." 
+                       onfocus="this.value=''"
+                       onblur="if(!this.value) this.value='-- All Repositories --'"
+                       class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                <datalist id="repoDatalist"></datalist>
+  <!-- Function: fetchRepositoryData() loads repository, branch, commit, and PR data. -->
+                <button onclick="fetchRepositoryData()" class="text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition flex-shrink-0">
+                  Inspect
+                </button>
+              </div>
+            </div>
+            <div class="text-xs text-slate-500 pb-2">
+              Select <strong>"-- All Repositories --"</strong> or type an individual repository to scan branches and commit health.
+            </div>
+          </div>
+
+          <!-- Step 5B: User Access -->
+          <div id="substepAccess" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
+            <div class="md:col-span-2">
+              <label class="block text-[11px] font-semibold text-blue-900 mb-1">
+                5. USER ID / EMAIL / DISPLAY NAME <span class="text-slate-400 font-normal">(Leave blank to fetch all project users)</span>
+              </label>
+  <!-- Field: User ID, email, or display name used to filter project access. -->
+              <input type="text" id="targetAccessUserQuery" 
+                     placeholder="e.g. user@domain.com or First Last" 
+                     class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+            <div>
+  <!-- Function: fetchUserAccessData() loads access, security group, and team information. -->
+              <button onclick="fetchUserAccessData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
+                Fetch User Access
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 5C: User Activity -->
+          <div id="substepActivity" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
+            <div>
+              <label class="block text-[11px] font-semibold text-blue-900 mb-1">
+                5. USER EMAIL / ID <span class="text-red-500">*</span>
+              </label>
+  <!-- Field: User email or ID used to search user activity. -->
+              <input type="text" id="targetUserQuery" 
+                     placeholder="e.g. user@domain.com or First Last" 
+                     class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-blue-900 mb-1">TIMEFRAME</label>
+  <!-- Field: Time range used to limit user activity results. -->
+              <select id="userTimeframeDays" class="w-full text-xs border border-blue-300 rounded-md px-2 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+                <option value="180">Last 6 Months</option>
+                <option value="365" selected>Last 1 Year</option>
+                <option value="0">All Time</option>
+              </select>
+            </div>
+            <div>
+  <!-- Function: fetchUserActivityData() loads activity and commit information. -->
+              <button onclick="fetchUserActivityData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
+                Search User Activity
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 5D: Pipelines -->
+          <div id="substepPipelines" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
+            <div class="md:col-span-2">
+              <label class="block text-[11px] font-semibold text-blue-900 mb-1">
+                RUNS PER PIPELINE TO SCAN
+              </label>
+  <!-- Field: Number of pipeline runs to scan for each pipeline. -->
+              <select id="pipelineRunsTop" class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <option value="20" selected>Latest 20 Runs per Pipeline</option>
+                <option value="50">Latest 50 Runs per Pipeline</option>
+                <option value="100">Latest 100 Runs per Pipeline</option>
+              </select>
+            </div>
+            <div>
+  <!-- Function: fetchPipelineData() loads pipeline definitions and build runs. -->
+              <button onclick="fetchPipelineData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
+                Fetch Pipeline Runs
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 5E: Service Connections & Agents -->
+          <div id="substepServiceAgents" class="hidden service-agents-filter bg-blue-50/50 p-3 rounded-md">
+            <div class="service-agents-filter-row service-agents-project-row">
+              <div>
+                <div class="text-[11px] font-semibold text-blue-900">SERVICE CONNECTIONS &amp; AGENT POOLS</div>
+                <div id="serviceAgentsScopeText" class="text-[11px] text-slate-500 mt-1">Select a project above for project-level information, or leave Project blank for organization-wide information.</div>
+              </div>
+  <!-- Function: fetchServiceConnectionAgentData() loads service connections and agent pools. -->
+              <button onclick="fetchServiceConnectionAgentData()" class="service-agents-fetch-btn text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition">
+                Fetch Connections &amp; Agents
+              </button>
+            </div>
+          </div>
+
+          <!-- Step 5F: Work Items -->
+          <div id="substepWorkItems" class="hidden grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50/50 p-3 rounded-md items-end">
+            <div class="md:col-span-2">
+              <label class="block text-[11px] font-semibold text-blue-900 mb-1">
+                ASSIGNED USER EMAIL / NAME <span class="text-slate-400 font-normal">(Leave blank to query all active work items)</span>
+              </label>
+  <!-- Field: Assigned user email or name used to filter active work items. -->
+              <input type="text" id="targetWorkItemUser" 
+                     placeholder="e.g. user@domain.com or First Last" 
+                     class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+            <div>
+  <!-- Function: fetchWorkItemsData() loads active work items and backlog information. -->
+              <button onclick="fetchWorkItemsData()" class="w-full text-xs bg-blue-600 text-white font-semibold px-4 py-2 rounded-md hover:bg-blue-700 transition h-[34px]">
+                Query Work Items
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <div id="statusBar" class="status-bar hidden"></div>
+        <div class="active-path-row"><span>Active Azure DevOps Path:</span><a id="activePathLink" href="javascript:void(0)">https://dev.azure.com/</a></div>
+      </section>
+
+      <div class="overview-heading">
+        <div>
+          <div class="eyebrow">02 · OVERVIEW</div>
+          <h2>Project intelligence</h2>
+        </div>
+        <span id="overviewProjectBadge" class="project-badge">—</span>
+      </div>
+
+      <div class="dashboard-content">
+
+        <!-- KPI Summary Cards -->
+        <div class="kpi-grid">
+          <div id="kpi-card-1" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p id="kpi-1-label" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Repository</p>
+            <p id="kpi-1-val" class="text-2xl font-extrabold text-slate-800 mt-1 truncate">-</p>
+          </div>
+          <div id="kpi-card-2" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p id="kpi-2-label" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Branches</p>
+            <p id="kpi-2-val" class="text-2xl font-extrabold text-blue-600 mt-1">0</p>
+          </div>
+          <div id="kpi-card-3" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p id="kpi-3-label" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total PRs</p>
+            <p id="kpi-3-val" class="text-2xl font-extrabold text-indigo-600 mt-1">0</p>
+          </div>
+          <div id="kpi-card-4" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p id="kpi-4-label" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active PRs</p>
+            <p id="kpi-4-val" class="text-2xl font-extrabold text-amber-500 mt-1">0</p>
+          </div>
+          <div id="kpi-card-5" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <p id="kpi-5-label" class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Completed PRs</p>
+            <p id="kpi-5-val" class="text-2xl font-extrabold text-emerald-600 mt-1">0</p>
+          </div>
+        </div>
+
+        <!-- Analytics Chart Container -->
+        <div id="chartSection" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <div class="flex flex-wrap justify-between items-center gap-4 mb-4">
+            <h2 id="chartTitle" class="text-base font-bold text-slate-900">Activity Overview</h2>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-500 font-medium">Chart Type:</span>
+  <!-- Function: changeChartType() switches the activity chart to Bar view. -->
+              <button onclick="changeChartType('bar')" class="px-2.5 py-1 text-xs font-medium border rounded hover:bg-slate-50 bg-slate-100 text-slate-700">Bar</button>
+  <!-- Function: changeChartType() switches the activity chart to Line view. -->
+              <button onclick="changeChartType('line')" class="px-2.5 py-1 text-xs font-medium border rounded hover:bg-slate-50 text-slate-600">Line</button>
+  <!-- Function: changeChartType() switches the activity chart to Pie view. -->
+              <button onclick="changeChartType('Pie')" class="px-2.5 py-1 text-xs font-medium border rounded hover:bg-slate-50 text-slate-600">Pie</button>
+            </div>
+          </div>
+          <div class="h-64">
+            <canvas id="analyticsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Universal Table Controls -->
+        <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3">
+          <div class="flex items-center gap-2 flex-grow max-w-sm">
+  <!-- Function: filterActiveTable() filters the currently displayed table rows. -->
+            <input type="text" id="tableFilterInput" oninput="filterActiveTable()" placeholder="Quick filter displayed rows..." class="w-full text-xs border border-slate-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+          </div>
+  <!-- Function: exportCurrentTableToXLSX() exports the active table to Excel. -->
+          <button id="btnRefreshWorkspace" onclick="refreshCurrentWorkspace()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-sm">
+            ↻ Refresh Workspace
+          </button>
+          <button onclick="exportFullDashboardToXLSX()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-sm">
+            Export Full Dashboard (.xlsx)
+          </button>
+          <button onclick="exportCurrentTableToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            Export Active Table (.xlsx)
+          </button>
+        </div>
+
+        <!-- VIEW 1: Repositories, Branches & Pull Requests -->
+        <section id="view-repositories" class="space-y-6">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Repositories & Active Branch Matrix</h3>
+                <span class="text-xs text-slate-400">Branches older than 90 days are flagged as Stale</span>
+              </div>
+  <!-- Function: exportBranchesToXLSX() exports the branch matrix to Excel. -->
+              <button onclick="exportBranchesToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Export Branches (.xlsx)
+              </button>
+            </div>
+            <table id="table-repositories" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Repository</th>
+                  <th class="p-4">Branch Name</th>
+                  <th class="p-4">Status / Health</th>
+                  <th class="p-4">Branch &amp; PR Policies</th>
+                  <th class="p-4">Last Author</th>
+                  <th class="p-4">Last Commit Date</th>
+                  <th class="p-4">Commit Message</th>
+                </tr>
+              </thead>
+              <tbody id="branchesTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="7" class="p-4 text-center text-slate-400">Select a project & repository to inspect.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreRepoContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderRepoTableBatch(true) shows the next repository table batch. -->
+              <button onclick="renderRepoTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="repoRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+          
+          <!-- Branches With Policies -->
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Branches With Policies</h3>
+                <span class="text-xs text-slate-400">Showing only branches that have branch policies configured</span>
+              </div>
+  <!-- Function: exportPolicyBranchesToXLSX() exports branches with policies to Excel. -->
+              <button onclick="exportPolicyBranchesToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Export Policy Branches (.xlsx)
+              </button>
+            </div>
+            <table id="table-policy-branches" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Repository</th>
+                  <th class="p-4">Branch Name</th>
+                  <th class="p-4">Required Reviewers</th>
+                  <th class="p-4">Branch Policies</th>
+                  <th class="p-4">Last Author</th>
+                  <th class="p-4">Last Commit Date</th>
+                </tr>
+              </thead>
+              <tbody id="policyBranchesTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="6" class="p-4 text-center text-slate-400">Select a project & repository to inspect.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMorePolicyBranchesContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderPolicyBranchesTableBatch(true) shows the next policy table batch. -->
+              <button onclick="renderPolicyBranchesTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="policyBranchesRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Pull Requests (Active & Completed)</h3>
+                <span class="text-xs text-slate-400">Showing latest pull requests for selected repositories</span>
+              </div>
+  <!-- Function: exportRepoPrsToXLSX() exports repository pull requests to Excel. -->
+              <button onclick="exportRepoPrsToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Export PRs (.xlsx)
+              </button>
+            </div>
+            <table id="table-repo-prs" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Repository</th>
+                  <th class="p-4">PR Title</th>
+                  <th class="p-4">Source &rarr; Target</th>
+                  <th class="p-4">PR Policy / Reviewers</th>
+                  <th class="p-4">Creator</th>
+                  <th class="p-4">Status</th>
+                  <th class="p-4">Created Date</th>
+                </tr>
+              </thead>
+              <tbody id="repoPrsTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="7" class="p-4 text-center text-slate-400">Select a project & repository to inspect.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreRepoPrsContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderRepoPrsTableBatch(true) shows the next pull request table batch. -->
+              <button onclick="renderRepoPrsTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="repoPrsRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 2: User Access, Security Groups & Teams Table -->
+        <section id="view-access" class="hidden space-y-4">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Project Teams, Security Groups & Member Permissions</h3>
+                <span class="text-xs text-slate-400">Includes Project Security Groups (Contributors, Admins, Readers) & Agile Teams</span>
+              </div>
+  <!-- Function: exportAccessToXLSX() exports access and team data to Excel. -->
+              <button onclick="exportAccessToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Export Access (.xlsx)
+              </button>
+            </div>
+            <table id="table-access" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Group / Team Name</th>
+                  <th class="p-4">Type / Scope</th>
+                  <th class="p-4">User Display Name</th>
+                  <th class="p-4">User Principal / Email</th>
+                </tr>
+              </thead>
+              <tbody id="accessTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="4" class="p-4 text-center text-slate-400">Enter a User ID or click "Fetch User Access" to load access permissions.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreAccessContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderAccessTableBatch(true) shows the next access table batch. -->
+              <button onclick="renderAccessTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="accessRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: Individual User Activity & Commits Table -->
+        <section id="view-activity" class="hidden space-y-6">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100">
+              <h3 class="font-bold text-slate-900 text-sm">User Commit History & Code Changes</h3>
+            </div>
+            <table id="table-user-commits" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Repository</th>
+                  <th class="p-4">Branch</th>
+                  <th class="p-4">Commit ID</th>
+                  <th class="p-4">Commit Date</th>
+                  <th class="p-4">Message / Changes</th>
+                </tr>
+              </thead>
+              <tbody id="userCommitsTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="p-4 text-center text-slate-400">Enter a user email/ID and click search.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreCommitsContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderCommitsTableBatch(true) shows the next activity/commit batch. -->
+              <button onclick="renderCommitsTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="commitsRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100">
+              <h3 class="font-bold text-slate-900 text-sm">Pull Requests (Created / Authored)</h3>
+            </div>
+            <table id="table-user-prs" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Repository</th>
+                  <th class="p-4">PR Title</th>
+                  <th class="p-4">Source &rarr; Target</th>
+                  <th class="p-4">Status</th>
+                  <th class="p-4">Creation Date</th>
+                </tr>
+              </thead>
+              <tbody id="userPrTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="p-4 text-center text-slate-400">No pull request activity loaded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 4: Pipelines & Builds Table -->
+        <section id="view-pipelines" class="space-y-6">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Pipelines Inventory & Trigger Analytics</h3>
+                <span class="text-xs text-slate-400">Aggregated success rates, Auto CI triggers, and Manual triggers</span>
+              </div>
+  <!-- Function: exportPipelinesToXLSX() exports pipeline data to Excel. -->
+              <button onclick="exportPipelinesToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                Export Pipelines (.xlsx)
+              </button>
+            </div>
+            <table id="table-pipeline-summary" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Pipeline Name</th>
+                  <th class="p-4">Total Scanned</th>
+                  <th class="p-4">Successful Builds</th>
+                  <th class="p-4">Failed / Other</th>
+                  <th class="p-4">Auto / CI Triggers</th>
+                  <th class="p-4">Manual Triggers</th>
+                  <th class="p-4">Success Rate</th>
+                </tr>
+              </thead>
+              <tbody id="pipelineSummaryTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="7" class="p-4 text-center text-slate-400">Click "Fetch Pipeline Runs" to scan pipeline definitions.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMorePipelineSummaryContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderPipelineSummaryTableBatch(true) shows the next pipeline summary batch. -->
+              <button onclick="renderPipelineSummaryTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="pipelineSummaryRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100">
+              <h3 class="font-bold text-slate-900 text-sm">Detailed CI/CD Build Runs</h3>
+            </div>
+            <table id="table-pipelines" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Pipeline Name</th>
+                  <th class="p-4">Build #</th>
+                  <th class="p-4">Branch</th>
+                  <th class="p-4">Trigger Type</th>
+                  <th class="p-4">Triggered By</th>
+                  <th class="p-4">Result</th>
+                  <th class="p-4">Finish Time</th>
+                </tr>
+              </thead>
+              <tbody id="pipelineTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="7" class="p-4 text-center text-slate-400">No build runs loaded.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMorePipelinesContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderPipelineTableBatch(true) shows the next detailed pipeline batch. -->
+              <button onclick="renderPipelineTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="pipelinesRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 5: Service Connections & Agents -->
+        <section id="view-serviceagents" class="hidden space-y-6">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Azure DevOps Service Connections</h3>
+                <span class="text-xs text-slate-400">Service endpoints visible for the selected project or organization scope. Authentication secrets are never displayed.</span>
+              </div>
+  <!-- Function: exportServiceConnectionsToXLSX() exports service connections to Excel. -->
+              <button onclick="exportServiceConnectionsToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                Export Service Connections (.xlsx)
+              </button>
+            </div>
+            <table id="table-service-connections" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Service Connection</th>
+                  <th class="p-4">Type</th>
+                  <th class="p-4">URL</th>
+                  <th class="p-4">Ready</th>
+                  <th class="p-4">Shared</th>
+                  <th class="p-4">Created By</th>
+                </tr>
+              </thead>
+              <tbody id="serviceConnectionsTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="6" class="p-4 text-center text-slate-400">Click "Fetch Connections &amp; Agents" to load service connections.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreServiceConnectionsContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderServiceConnectionsTableBatch(true) shows the next service connection batch. -->
+              <button onclick="renderServiceConnectionsTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="serviceConnectionsRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">Agent Pools &amp; Agents</h3>
+                <span class="text-xs text-slate-400">Project scans show only pools connected to the selected project; organization scans show all organization pools.</span>
+              </div>
+  <!-- Function: exportAgentsToXLSX() exports agent pool and agent data to Excel. -->
+              <button onclick="exportAgentsToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+                Export Agents (.xlsx)
+              </button>
+            </div>
+            <table id="table-agents" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">Agent Pool</th>
+                  <th class="p-4">Hosted</th>
+                  <th class="p-4">Pool Type</th>
+                  <th class="p-4">Agent Name</th>
+                  <th class="p-4">Status</th>
+                  <th class="p-4">Enabled</th>
+                  <th class="p-4">OS</th>
+                  <th class="p-4">Version</th>
+                  <th class="p-4">Created On</th>
+                </tr>
+              </thead>
+              <tbody id="agentsTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="9" class="p-4 text-center text-slate-400">Click "Fetch Connections &amp; Agents" to load agent pools and agents.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreAgentsContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderAgentsTableBatch(true) shows the next agent batch. -->
+              <button onclick="renderAgentsTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="agentsRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 6: Work Items Table -->
+        <section id="view-workitems" class="hidden space-y-4">
+          <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <div class="p-4 border-b border-slate-100">
+              <h3 class="font-bold text-slate-900 text-sm">Active Work Items & Backlog Status</h3>
+            </div>
+            <table id="table-workitems" class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+                  <th class="p-4">ID</th>
+                  <th class="p-4">Work Item Type</th>
+                  <th class="p-4">Title</th>
+                  <th class="p-4">Assigned To</th>
+                  <th class="p-4">State</th>
+                  <th class="p-4">Created Date</th>
+                </tr>
+              </thead>
+              <tbody id="workItemsTableBody" class="divide-y divide-slate-100">
+                <tr><td colspan="6" class="p-4 text-center text-slate-400">Query work items to view backlog.</td></tr>
+              </tbody>
+            </table>
+            <div id="seeMoreWorkItemsContainer" class="hidden p-4 border-t border-slate-100 text-center">
+  <!-- Function: renderWorkItemsTableBatch(true) shows the next work item batch. -->
+              <button onclick="renderWorkItemsTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+                See More (<span id="workItemsRemainingCount">0</span> remaining)
+              </button>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+  <!-- Modular Scripts -->
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/serviceagents.js"></script>
+  <script src="js/repos.js"></script>
+  <script src="js/access.js"></script>
+  <script src="js/activity.js"></script>
+  <script src="js/pipelines.js"></script>
+  <script src="js/workitems.js"></script>
+</body>
+</html>
+  </div>
