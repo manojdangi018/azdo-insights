@@ -115,6 +115,10 @@ function restoreWorkspaceDisplayState(category) {
   const state = workspaceDisplayStore[category];
   if (!state) {
     setWorkspaceDefaultKpis(category);
+    // Reset chart data when switching to an un-scanned workspace
+    if (typeof renderChart === 'function') {
+      renderChart([], [], 'Overview');
+    }
     return;
   }
 
@@ -133,6 +137,10 @@ function restoreWorkspaceDisplayState(category) {
     currentChartType = state.chart.type || 'bar';
     if (typeof renderChart === 'function') {
       renderChart(state.chart.labels || [], state.chart.values || [], state.chart.label || 'Overview');
+    }
+  } else {
+    if (typeof renderChart === 'function') {
+      renderChart([], [], 'Overview');
     }
   }
 }
