@@ -1,40 +1,40 @@
 /* ============================================================
-   AZURE DEVOPS INTELLIGENCE HUB — ORGANIZED PRODUCTION STYLESHEET
-   Purpose: Same CSS rules as the supplied file, rearranged into a
-   clear step-by-step order. No styling declarations were intentionally
-   changed; comments only explain what each section controls.
+  AZURE DEVOPS INTELLIGENCE HUB — ORGANIZED PRODUCTION STYLESHEET
+  Purpose: Same CSS rules as the supplied file, rearranged into a
+  clear step-by-step order. No styling declarations were intentionally
+  changed; comments only explain what each section controls.
 
-   CODE ORDER
-   1. Global variables and base rules
-   2. Shared header / branding
-   3. Page 1 — connection screen
-   4. Page 2 — workspace shell and sidebar
-   5. Page 2 — connection status
-   6. Page 2 — project selection and workspace controls
-   7. Page 2 — repository selection
-   8. Page 2 — KPI cards and value colors
-   9. Page 2 — overview / chart
-   10. Background watermarks
-   11. Responsive layout
-   ============================================================ */
+  CODE ORDER
+  1. Global variables and base rules
+  2. Shared header / branding
+  3. Page 1 — connection screen
+  4. Page 2 — workspace shell and sidebar
+  5. Page 2 — connection status
+  6. Page 2 — project selection and workspace controls
+  7. Page 2 — repository selection
+  8. Page 2 — KPI cards and value colors
+  9. Page 2 — overview / chart
+  10. Background watermarks
+  11. Responsive layout
+  ============================================================ */
 /* ============================================================
-   STEP 1 — GLOBAL VARIABLES & BASE STYLES
-   Purpose: Shared colors, page defaults, and common form fonts.
-   ============================================================ */
+  STEP 1 — GLOBAL VARIABLES & BASE STYLES
+  Purpose: Shared colors, page defaults, and common form fonts.
+  ============================================================ */
 /* ============================================================
 AZURE DEVOPS INTELLIGENCE HUB — COMPLETE PRODUCTION STYLESHEET
 ============================================================ */
 /* ============================================================
-   PAGE RESTORE — NO CONNECTION PAGE FLASH
-   Purpose: Immediately show Page 2 when a Page 2 session exists.
-   ============================================================ */
+  PAGE RESTORE — NO CONNECTION PAGE FLASH
+  Purpose: Immediately show Page 2 when a Page 2 session exists.
+  ============================================================ */
 
 html.restore-workspace-page #connectionPage {
-  display: none !important;
+display: none !important;
 }
 
 html.restore-workspace-page #workspacePage {
-  display: block !important;
+display: block !important;
 }
 :root {
 --bg-deep: #030d22;
@@ -77,9 +77,9 @@ position: relative;
 }
 
 /* ============================================================
-   STEP 2 — SHARED HEADER & BRANDING
-   Purpose: Header height, logo, title, subtitle, and top actions.
-   ============================================================ */
+  STEP 2 — SHARED HEADER & BRANDING
+  Purpose: Header height, logo, title, subtitle, and top actions.
+  ============================================================ */
 /* ============================================================
 SHARED TOPBAR & HEADER BRANDING
 Purpose: Top header, branding, logo, and shared navigation styling.
@@ -100,7 +100,7 @@ justify-content: space-between;
     display: flex;
     align-items: center;
     gap: 18px;
-    padding-top: 23px;
+    padding-top: 22px;
     padding-left: 10px;
 }
 
@@ -154,9 +154,9 @@ gap: 14px;
 }
 
 /* ============================================================
-   STEP 3 — PAGE 1: AZURE DEVOPS CONNECTION
-   Purpose: Landing page, hero content, connection card, and fields.
-   ============================================================ */
+  STEP 3 — PAGE 1: AZURE DEVOPS CONNECTION
+  Purpose: Landing page, hero content, connection card, and fields.
+  ============================================================ */
 /* ============================================================
 PAGE 1: LANDING & CONNECTION EXPERIENCE
 Purpose: Azure DevOps connection/landing page layout and controls.
@@ -421,21 +421,21 @@ margin-top: 6px;
 }
 
 /* ============================================================
-   LOAD PROJECTS BUTTON — LOADING STATE
-   Purpose: Darkens the button while projects are loading.
-   ============================================================ */
+  LOAD PROJECTS BUTTON — LOADING STATE
+  Purpose: Darkens the button while projects are loading.
+  ============================================================ */
 
 #btnLoadProjects.loading {
-  background: #1264b8 !important;
-  color: #ffffff !important;
-  cursor: wait !important;
-  opacity: 0.9;
+background: #1264b8 !important;
+color: #ffffff !important;
+cursor: wait !important;
+opacity: 0.9;
 }
 
 
 .btn-load-projects:hover {
-  opacity: 0.95;
-  transform: translateY(-1px);
+opacity: 0.95;
+transform: translateY(-1px);
 }
 
 .remember-toggle {
@@ -453,9 +453,9 @@ accent-color: var(--azure-bright);
 }
 
 /* ============================================================
-   STEP 4 — PAGE 2: WORKSPACE SHELL & SIDEBAR
-   Purpose: Dashboard page background, sidebar navigation, and shell.
-   ============================================================ */
+  STEP 4 — PAGE 2: WORKSPACE SHELL & SIDEBAR
+  Purpose: Dashboard page background, sidebar navigation, and shell.
+  ============================================================ */
 .workspace-page {
 min-height: 100vh;
 background-color: var(--bg-deep);
@@ -513,25 +513,6 @@ text-align: left;
 transition: all 0.15s ease;
 }
 
-.nav-icon {
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-icon svg {
-  width: 17px;
-  height: 17px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .sidebar-item:hover {
 background: #0e2756;
 color: #fff;
@@ -583,21 +564,21 @@ box-shadow: none !important;
 }
 
 /* ============================================================
-   REPOSITORY INSPECT — FETCHING STATE
-   Purpose: Makes the fetching message visibly pulse while data loads.
-   ============================================================ */
+  REPOSITORY INSPECT — FETCHING STATE
+  Purpose: Makes the fetching message visibly pulse while data loads.
+  ============================================================ */
 #statusBar.fetching {
-  animation: repoFetchingPulse 1.2s ease-in-out infinite;
+animation: repoFetchingPulse 1.2s ease-in-out infinite;
 }
 
 @keyframes repoFetchingPulse {
-  0%, 100% {
-    opacity: 0.45;
-  }
+0%, 100% {
+opacity: 0.45;
+}
 
-  50% {
-    opacity: 1;
-  }
+50% {
+opacity: 1;
+}
 }
 
 .app-shell {
@@ -611,63 +592,63 @@ padding: 24px 32px 50px;
 }
 
 /* ============================================================
-   REPOSITORY INSPECT — FETCHING SPINNER
-   Purpose: Shows a small rotating spinner before the fetching text.
-   ============================================================ */
+  REPOSITORY INSPECT — FETCHING SPINNER
+  Purpose: Shows a small rotating spinner before the fetching text.
+  ============================================================ */
 
 #statusBar.fetching {
-  display: flex !important;
-  align-items: center;
-  gap: 8px;
+display: flex !important;
+align-items: center;
+gap: 8px;
 }
 
 #statusBar.fetching::before {
-  content: "";
-  width: 11px;
-  height: 11px;
-  flex: 0 0 11px;
-  border: 2px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: repoFetchingSpin 0.8s linear infinite;
+content: "";
+width: 11px;
+height: 11px;
+flex: 0 0 11px;
+border: 2px solid currentColor;
+border-top-color: transparent;
+border-radius: 50%;
+animation: repoFetchingSpin 0.8s linear infinite;
 }
 
 @keyframes repoFetchingSpin {
-  from {
-    transform: rotate(0deg);
-  }
+from {
+transform: rotate(0deg);
+}
 
-  to {
-    transform: rotate(360deg);
-  }
+to {
+transform: rotate(360deg);
+}
 }
 /* ============================================================
 PAGE 2: WORKSPACE & METRIC DASHBOARD
 Purpose: This is used in second page for connected button.
 ============================================================ */
 /* ============================================================
-   FINAL HEADER COLOR FIX
-   Purpose: Keep header title (Azure DevOps Intelligence Hub) and subtitle clearly visible.
-   ============================================================ */
+  FINAL HEADER COLOR FIX
+  Purpose: Keep header title (Azure DevOps Intelligence Hub) and subtitle clearly visible.
+  ============================================================ */
 
 .app-topbar .app-title {
-  color: #ffffff !important;
+color: #ffffff !important;
 }
 
 .app-topbar .app-subtitle {
-  color: #8ea8cf !important;
+color: #8ea8cf !important;
 }
 
 /* Keep Connected transparent with green border/text */
 .app-topbar .connection-badge.connected {
-  background: transparent !important;
-  border: 1px solid #0b9f72 !important;
-  color: #0b9f72 !important;
+background: transparent !important;
+border: 1px solid #0b9f72 !important;
+color: #0b9f72 !important;
 }
 
 .app-topbar .connection-badge.connected .status-dot {
-  background: #0b9f72 !important;
-  box-shadow: 0 0 7px rgba(11, 159, 114, 0.45) !important;
+background: #0b9f72 !important;
+box-shadow: 0 0 7px rgba(11, 159, 114, 0.45) !important;
 }
 
 /* Page 2 - Connected button function */
@@ -717,9 +698,9 @@ font-size: 11px !important;
 }
 
 /* ============================================================
-   STEP 6 — PAGE 2: WORKSPACE CONTROLS
-   Purpose: Project controls, switch button, project dropdown, and path.
-   ============================================================ */
+  STEP 6 — PAGE 2: WORKSPACE CONTROLS
+  Purpose: Project controls, switch button, project dropdown, and path.
+  ============================================================ */
 /* ============================================================
 PAGE 2 — WORKSPACE CONTROL CARD
 Purpose: Main dark card containing project selection and service controls.
@@ -810,9 +791,9 @@ text-decoration: none;
 }
 
 /* ============================================================
-   STEP 7 — PAGE 2: REPOSITORY SELECTION
-   Purpose: Spacing for the repository selection control.
-   ============================================================ */
+  STEP 7 — PAGE 2: REPOSITORY SELECTION
+  Purpose: Spacing for the repository selection control.
+  ============================================================ */
 /* ============================================================
 PAGE 2 — REPOSITORY SELECTION
 Purpose: Adds clear spacing between the repository label and selector controls.
@@ -823,9 +804,9 @@ margin-bottom: 8px !important;
 
 
 /* ============================================================
-   STEP 8 — PAGE 2: KPI CARD LAYOUT
-   Purpose: Dashboard KPI grid, card layout, labels, and values.
-   ============================================================ */
+  STEP 8 — PAGE 2: KPI CARD LAYOUT
+  Purpose: Dashboard KPI grid, card layout, labels, and values.
+  ============================================================ */
 /* ============================================================
 PAGE 2 — DASHBOARD KPI CARDS
 Purpose: Styles the five summary cards showing repository, branch, and PR metrics.
@@ -879,13 +860,13 @@ margin: 4px 0 0 !important;
 
 
 /* ============================================================
-   STEP 9 — PAGE 2: KPI VALUE COLORS
-   Purpose: Gives each summary KPI value its assigned color.
-   ============================================================ */
+  STEP 9 — PAGE 2: KPI VALUE COLORS
+  Purpose: Gives each summary KPI value its assigned color.
+  ============================================================ */
 /* ============================================================
- PAGE 2 — REPOSITORY KPI VALUE COLORS
- Purpose: Gives each repository KPI value a distinct color.
- ============================================================ */
+PAGE 2 — REPOSITORY KPI VALUE COLORS
+Purpose: Gives each repository KPI value a distinct color.
+============================================================ */
 
 #kpi-1-val {
 color: #2563eb !important;
@@ -908,13 +889,13 @@ color: #059669 !important;
 }
 
 /* ============================================================
-   STEP 10 — PAGE 2: PROJECT BADGE & ACTIVITY CHART
-   Purpose: Selected project name, chart container, and chart content.
-   ============================================================ */
-/* ============================================================
-  SELECTED PROJECT NAME
-  Purpose: Display the selected project name such as XYZ..clearly above the Repository KPI cards.
+  STEP 10 — PAGE 2: PROJECT BADGE & ACTIVITY CHART
+  Purpose: Selected project name, chart container, and chart content.
   ============================================================ */
+/* ============================================================
+ SELECTED PROJECT NAME
+ Purpose: Display the selected project name such as XYZ..clearly above the Repository KPI cards.
+ ============================================================ */
 .overview-heading {
 display: flex !important;
 flex-direction: column !important;
@@ -960,18 +941,18 @@ z-index: 1;
 /* Activity chart section: contains the dashboard activity visualization. */
 /* Activity chart section: matches the exact same appearance as table cards */
 #chartSection {
-  border-radius: 0.75rem;
+border-radius: 0.75rem;
 }
 
 #chartSection canvas {
-  display: block;
-  width: 100% !important;
+display: block;
+width: 100% !important;
 }
 
 /* ============================================================
-   STEP 11 — BACKGROUND WATERMARKS
-   Purpose: Decorative DevOps logo behind both application pages.
-   ============================================================ */
+  STEP 11 — BACKGROUND WATERMARKS
+  Purpose: Decorative DevOps logo behind both application pages.
+  ============================================================ */
 /* ============================================================
 BACKGROUND DECORATIVE WATERMARKS
 Purpose: Background watermark positioning and appearance for both pages.
@@ -1009,9 +990,9 @@ opacity: 0.12;
 }
 
 /* ============================================================
-   STEP 12 — RESPONSIVE BREAKPOINTS
-   Purpose: Keeps the layout usable on smaller screens.
-   ============================================================ */
+  STEP 12 — RESPONSIVE BREAKPOINTS
+  Purpose: Keeps the layout usable on smaller screens.
+  ============================================================ */
 /* ============================================================
 RESPONSIVE BREAKPOINTS
 Purpose: Adjust layout and controls for smaller screen sizes.
