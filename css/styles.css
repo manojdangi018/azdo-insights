@@ -101,7 +101,7 @@ Purpose: Top header, branding, logo, and shared navigation styling.
   display: flex;
   align-items: center;
   gap: 18px;
-  padding-top: 22px;
+  padding-top: 21px;
   padding-left: 10px;
 }
 
