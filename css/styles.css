@@ -97,11 +97,13 @@ justify-content: space-between;
 
 .landing-brand,
 .sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 18x;
-  padding-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding-top: 23px;
+    padding-left: 10px;
 }
+
 .brand-mark {
 width: 38px;
 height: 38px;
@@ -509,6 +511,25 @@ font-weight: 600;
 cursor: pointer;
 text-align: left;
 transition: all 0.15s ease;
+}
+
+.nav-icon {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .sidebar-item:hover {
@@ -1032,4 +1053,14 @@ grid-template-columns: 1fr 1fr;
 .landing-hero-features {
 grid-template-columns: 1fr;
 }
+}
+
+
+/* ============================================================
+   WORKSPACE REFRESH BUTTON — LOADING STATE
+   Purpose: Shows that the current workspace is being refreshed.
+   ============================================================ */
+#btnRefreshWorkspace.loading {
+  cursor: wait !important;
+  opacity: 0.75;
 }
