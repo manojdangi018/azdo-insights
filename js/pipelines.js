@@ -7,7 +7,6 @@ async function fetchPipelineData() {
   const authHeader = 'Basic ' + btoa(':' + pat);
   showSection('pipelines');
   startFetching(`Scanning pipeline definitions and recent runs in descending order...`);
-  updateFetchingProgress('Loading pipeline definitions...', 2);
 
   try {
     const modernUrl = `https://dev.azure.com/${org}/${project}/_apis/pipelines?api-version=${API_VERSION}`;

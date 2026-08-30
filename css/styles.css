@@ -1033,13 +1033,3 @@ grid-template-columns: 1fr 1fr;
 grid-template-columns: 1fr;
 }
 }
-
-
-/* ============================================================
-   WORKSPACE REFRESH BUTTON — LOADING STATE
-   Purpose: Shows that the current workspace is being refreshed.
-   ============================================================ */
-#btnRefreshWorkspace.loading {
-  cursor: wait !important;
-  opacity: 0.75;
-}

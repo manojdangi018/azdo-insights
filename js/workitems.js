@@ -7,7 +7,6 @@ async function fetchWorkItemsData() {
   const authHeader = 'Basic ' + btoa(':' + pat);
   showSection('workitems');
   startFetching(targetUser ? `Querying work items assigned to "${targetUser}"...` : `Querying all active work items and sprint status...`);
-  updateFetchingProgress('Running Azure DevOps work item query...', 2);
 
   try {
     let wiql = `SELECT [System.Id], [System.Title], [System.WorkItemType], [System.State], [System.AssignedTo], [System.IterationPath], [System.CreatedDate] FROM workitems WHERE [System.TeamProject] = @project`;
@@ -118,7 +117,6 @@ async function fetchWorkItemsData() {
 
 
 
-  updateFetchingProgress('Finalizing results and updating dashboard...', 4);
     setStatus(`Loaded ${rawStore.workitems.length} work items successfully.`, 'success');
 
 

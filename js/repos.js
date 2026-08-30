@@ -611,8 +611,6 @@ async function fetchRepositoryData() {
   return;
   }
 
-  updateFetchingProgress('Preparing selected repositories...', 2);
-
   let repoBranchCounts = {};
 
   let allPRs = [];
@@ -894,14 +892,10 @@ async function fetchRepositoryData() {
         }
       );
 
-    updateFetchingProgress('Waiting for repository branches and pull requests...', 3);
-
     const results =
       await Promise.all(
         repoPromises
       );
-
-    updateFetchingProgress('Processing dashboard results...', 4);
 
     rawStore.repos =
       results.flat();

@@ -10,7 +10,6 @@ async function fetchUserActivityData() {
   const authHeader = 'Basic ' + btoa(':' + pat);
   showSection('activity');
   startFetching(`Scanning all repositories, branches & commits for "${userQuery}"...`);
-  updateFetchingProgress('Loading repositories and commit history...', 2);
 
   let reposToScan = cachedRepos;
   if (!reposToScan || reposToScan.length === 0) {
@@ -159,7 +158,6 @@ async function fetchUserActivityData() {
     stopFetching();
 
 
-  updateFetchingProgress('Finalizing results and updating dashboard...', 4);
     setStatus(`Found ${userCommits.length} commits and ${userPRs.length} PRs for "${userQuery}".`, 'success');
 
     } catch (err) {

@@ -388,20 +388,23 @@
 
         <!-- Universal Table Controls -->
         <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3">
-          <div class="flex items-center gap-2 flex-grow max-w-sm">
-  <!-- Function: filterActiveTable() filters the currently displayed table rows. -->
+          <div class="flex items-center gap-2 flex-grow max-w-xl">
+            <!-- Filter Target Dropdown -->
+            <select id="tableFilterScope" onchange="filterActiveTable()" class="text-xs border border-slate-300 rounded-md px-2.5 py-1.5 bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium">
+              <option value="all">Filter: All Tables</option>
+              <option value="table-repositories">Filter: Repositories & Active Branch</option>
+              <option value="table-policy-branches">Filter: Branches With Policies</option>
+              <option value="table-repo-prs">Filter: Pull Requests</option>
+            </select>
+            
+            <!-- Filter Search Input -->
             <input type="text" id="tableFilterInput" oninput="filterActiveTable()" placeholder="Quick filter displayed rows..." class="w-full text-xs border border-slate-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
           </div>
-  <!-- Function: exportCurrentTableToXLSX() exports the active table to Excel. -->
-          <button id="btnRefreshWorkspace" onclick="refreshCurrentWorkspace()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-sm">
-            ↻ Refresh Workspace
-          </button>
-          <button onclick="exportFullDashboardToXLSX()" class="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-sm">
-            Export Full Dashboard (.xlsx)
-          </button>
+
+          <!-- Full Multi-Sheet Export Button -->
           <button onclick="exportCurrentTableToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg transition flex items-center gap-2 shadow-sm">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-            Export Active Table (.xlsx)
+            Export Full Telemetry (.xlsx)
           </button>
         </div>
 

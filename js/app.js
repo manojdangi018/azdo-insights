@@ -174,125 +174,13 @@ function setStatus(msg, type = 'info') {
    SHARED WORKSPACE FETCHING STATE
    Purpose: Reuse the same blinking status + spinner for every workspace.
    ============================================================ */
-let fetchingProgress = { step: 0, total: 1 };
-
-function startFetching(message, total = 4) {
-  fetchingProgress = { step: 1, total: Math.max(1, total) };
-  setStatus(`Fetching ${fetchingProgress.step}/${fetchingProgress.total} — ${message}`, 'info');
-  document.getElementById('statusBar')?.classList.add('fetching');
-}
-
-function updateFetchingProgress(message, step) {
-  fetchingProgress.step = Math.min(
-    Math.max(1, step ?? (fetchingProgress.step + 1)),
-    fetchingProgress.total
-  );
-  setStatus(
-    `Fetching ${fetchingProgress.step}/${fetchingProgress.total} — ${message}`,
-    'info'
-  );
+function startFetching(message) {
+  setStatus(message, 'info');
   document.getElementById('statusBar')?.classList.add('fetching');
 }
 
 function stopFetching() {
   document.getElementById('statusBar')?.classList.remove('fetching');
-}
-
-async function refreshCurrentWorkspace() {
-  const refreshBtn = document.getElementById('btnRefreshWorkspace');
-  if (refreshBtn) {
-    refreshBtn.disabled = true;
-    refreshBtn.classList.add('loading');
-    refreshBtn.textContent = 'Refreshing...';
-  }
-
-  try {
-    switch (activeCategory) {
-      case 'repositories':
-        return await fetchRepositoryData();
-      case 'user_access':
-        return await fetchUserAccessData();
-      case 'user_activity':
-        return await fetchUserActivityData();
-      case 'pipelines':
-        return await fetchPipelineData();
-      case 'service_agents':
-        return await fetchServiceConnectionAgentData();
-      case 'work_items':
-        return await fetchWorkItemsData();
-      default:
-        setStatus('Select a workspace to refresh.', 'info');
-    }
-  } finally {
-    if (refreshBtn) {
-      refreshBtn.disabled = false;
-      refreshBtn.classList.remove('loading');
-      refreshBtn.textContent = '↻ Refresh Workspace';
-    }
-  }
-}
-
-function exportFullDashboardToXLSX() {
-  if (typeof XLSX === 'undefined') {
-    alert('Excel library is still loading, please try again in a moment.');
-    return;
-  }
-
-  const sheets = {};
-  const addSheet = (name, rows) => {
-    if (Array.isArray(rows) && rows.length) sheets[name] = rows;
-  };
-
-  const kpis = [];
-  for (let i = 1; i <= 5; i++) {
-    const label = document.getElementById(`kpi-${i}-label`);
-    const value = document.getElementById(`kpi-${i}-val`);
-    if (label && value) kpis.push({ Metric: label.textContent, Value: value.textContent });
-  }
-  addSheet('Dashboard Overview', kpis);
-
-  addSheet('Repositories', (rawStore.repos || []).map(b => ({
-    Repository: b.repo, 'Branch Name': b.branch, 'Status / Health': b.isStale ? 'Stale' : 'Active',
-    'Branch Policies': b.policies || b.policySummary || '', 'Last Author': b.author,
-    'Last Commit Date': b.date, 'Commit Message': b.msg
-  })));
-
-  addSheet('Pull Requests', (rawStore.repoPrs || []).map(p => ({
-    Repository: p.repo, 'PR Title': p.title, 'Source Branch': p.source, 'Target Branch': p.target,
-    'Target Branch Policies': p.targetPolicies || '', Creator: p.creator, Status: p.status,
-    'Created Date': p.createdDate
-  })));
-
-  addSheet('Pipelines', (rawStore.pipelineSummaries || []).map(p => ({...p})));
-  addSheet('Pipeline Runs', (rawStore.pipelines || []).map(r => ({
-    'Pipeline Name': r.name, 'Build Number': r.buildNumber, Branch: r.branch,
-    'Triggered By': r.author, Result: r.result, 'Finish Time': r.finishTime
-  })));
-
-  addSheet('Work Items', (rawStore.workitems || []).map(w => ({
-    ID: w.id, 'Work Item Type': w.type, Title: w.title, 'Assigned To': w.assignedTo,
-    State: w.state, 'Created Date': w.createdDate
-  })));
-
-  addSheet('User Activity', (rawStore.commits || []).map(c => ({
-    Repository: c.repo, Branch: c.branch, 'Commit ID': c.commitId,
-    'Commit Date': c.date, Message: c.comment
-  })));
-
-  addSheet('Access & Teams', (rawStore.access || []).map(a => ({
-    'Team / Group Name': a.team, 'User Display Name': a.name,
-    'User Principal / Email': a.email
-  })));
-
-  addSheet('Service Connections', (rawStore.serviceConnections || []).map(x => ({...x})));
-  addSheet('Agents', (rawStore.agents || []).map(x => ({...x})));
-
-  if (!Object.keys(sheets).length) {
-    alert('No dashboard data is loaded yet. Fetch at least one workspace first.');
-    return;
-  }
-
-  exportToExcelFile(sheets, 'AzureDevOps_Intelligence_Full_Dashboard');
 }
 
 function showWorkspacePage() {
@@ -679,13 +567,24 @@ function disconnectSession() {
 
 function filterActiveTable() {
   const query = document.getElementById('tableFilterInput').value.toLowerCase();
+  const scope = document.getElementById('tableFilterScope')?.value || 'all';
   const activeSection = document.getElementById(activeViewSection);
   if (!activeSection) return;
 
-  const rows = activeSection.querySelectorAll('tbody tr');
-  rows.forEach(r => {
-    const text = r.textContent.toLowerCase();
-    r.style.display = text.includes(query) ? '' : 'none';
+  const tables = activeSection.querySelectorAll('table');
+  tables.forEach(table => {
+    const isTarget = scope === 'all' || table.id === scope;
+    const rows = table.querySelectorAll('tbody tr');
+
+    rows.forEach(r => {
+      if (!isTarget) {
+        // If not in the chosen scope, keep standard visibility
+        r.style.display = '';
+      } else {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(query) ? '' : 'none';
+      }
+    });
   });
 }
 
@@ -711,36 +610,62 @@ function exportToExcelFile(sheetsData, baseFileName) {
 
 function exportCurrentTableToXLSX() {
   if (activeViewSection === 'view-repositories') {
+    // 1. All Branches
     const branchData = (rawStore.repos || []).map(b => ({
       "Repository": b.repo,
       "Branch Name": b.branch,
       "Status / Health": b.isStale ? "Stale" : "Active",
+      "Branch Policies": b.policies && b.policies.length ? b.policies.join(', ') : "None",
+      "Required Reviewers": b.minReviewers || 0,
       "Last Author": b.author,
       "Last Commit Date": b.date,
       "Commit Message": b.msg
     }));
 
+    // 2. Branches with configured Policies only
+    const policyBranches = (rawStore.repos || []).filter(
+      b => b.hasPolicy === true && Array.isArray(b.policies) && b.policies.length > 0
+    );
+    const policyBranchData = policyBranches.map(b => ({
+      "Repository": b.repo,
+      "Branch Name": b.branch,
+      "Required Reviewers": b.minReviewers || 0,
+      "Branch Policies": b.policies.join(', '),
+      "Last Author": b.author || "Unknown",
+      "Last Commit Date": b.date || "N/A",
+      "Commit Message": b.msg || ""
+    }));
+
+    // 3. Pull Requests
     const prData = (rawStore.repoPrs || []).map(p => ({
       "Repository": p.repo,
       "PR Title": p.title,
       "Source Branch": p.source,
       "Target Branch": p.target,
+      "Target Branch Policies": p.targetPolicies && p.targetPolicies.length ? p.targetPolicies.join(', ') : "None",
+      "Min Required Reviewers": p.minRequiredReviewers || 0,
+      "Assigned Reviewers": p.reviewersCount || 0,
       "Creator": p.creator,
       "Status": p.status,
       "Created Date": p.createdDate
     }));
 
-    exportToExcelFile({ "Branches": branchData, "Pull Requests": prData }, "AzureDevOps_Repositories_Telemetry");
+    exportToExcelFile({
+      "All Branches": branchData,
+      "Branches With Policies": policyBranchData,
+      "Pull Requests": prData
+    }, "AzureDevOps_Repositories_Full_Telemetry");
   } 
   else if (activeViewSection === 'view-access') {
     const accessData = (rawStore.access || []).map(a => ({
       "Team / Group Name": a.team,
+      "Type / Scope": a.type,
       "User Display Name": a.name,
       "User Principal / Email": a.email
     }));
     exportToExcelFile({ "Access & Permissions": accessData }, "AzureDevOps_Security_Access");
   } 
-  else if (activeViewSection === 'view-activity') {
+else if (activeViewSection === 'view-activity') {
     const commitData = (rawStore.commits || []).map(c => ({
       "Repository": c.repo,
       "Branch": c.branch,
@@ -748,23 +673,23 @@ function exportCurrentTableToXLSX() {
       "Commit Date": c.date,
       "Message": c.comment
     }));
-    exportToExcelFile({ "User Commits": commitData }, "AzureDevOps_User_Activity");
-  } 
-  else if (activeViewSection === 'view-pipelines') {
-    const pipelineData = (rawStore.pipelines || []).map(r => ({
-      "Pipeline Name": r.name,
-      "Build Number": r.buildNumber,
-      "Branch": r.branch,
-      "Triggered By": r.author,
-      "Result": r.result,
-      "Finish Time": r.finishTime
+    const prData = (rawStore.repoPrs || []).map(p => ({
+      "Repository": p.repo,
+      "PR Title": p.title,
+      "Source": p.source,
+      "Target": p.target,
+      "Status": p.status,
+      "Created Date": p.createdDate
     }));
-    exportToExcelFile({ "Pipelines": pipelineData }, "AzureDevOps_Pipelines");
+    exportToExcelFile({ "User Commits": commitData, "User PRs": prData }, "AzureDevOps_User_Activity");
+  }
+  else if (activeViewSection === 'view-pipelines') {
+    exportPipelinesToXLSX();
   } 
   else if (activeViewSection === 'view-serviceagents') {
     exportServiceConnectionsAndAgentsToXLSX();
   }
-    else if (activeViewSection === 'view-workitems') {
+  else if (activeViewSection === 'view-workitems') {
     const wiData = (rawStore.workitems || []).map(w => ({
       "ID": w.id,
       "Work Item Type": w.type,

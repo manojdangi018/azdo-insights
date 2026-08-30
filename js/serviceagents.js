@@ -245,7 +245,6 @@ async function fetchServiceConnectionAgentData() {
   updateServiceAgentsScopeText();
   const scopeText = scopeProject ? `project ${scopeProject}` : 'organization-wide';
   startFetching(`Fetching ${scopeText} service connections, agent pools and agents...`);
-  updateFetchingProgress('Loading service connections and agent pools...', 2);
 
   try {
     let serviceConnections = [];
@@ -286,7 +285,6 @@ async function fetchServiceConnectionAgentData() {
     stopFetching();
 
 
-  updateFetchingProgress('Finalizing results and updating dashboard...', 4);
     setStatus(`Loaded ${serviceConnections.length} service connections, ${pools.length} ${projectScoped ? 'project-connected' : 'organization'} agent pools, ${realAgentCount} self-hosted agents and ${hostedPoolCount} Microsoft-hosted pools (${scopeText}).`, 'success');
 
     } catch (error) {

@@ -7,7 +7,6 @@ async function fetchUserAccessData() {
   const authHeader = 'Basic ' + btoa(':' + pat);
   showSection('access');
   startFetching(userQuery ? `Scanning groups and teams for "${userQuery}"...` : `Fetching all project security groups, teams, and members...`);
-  updateFetchingProgress('Loading groups and team memberships...', 2);
 
   let accessRows = [];
   let groupMemberCounts = {};
@@ -174,7 +173,6 @@ async function fetchUserAccessData() {
     stopFetching();
 
 
-  updateFetchingProgress('Finalizing results and updating dashboard...', 4);
     setStatus(`Loaded ${accessRows.length} member assignments across all ${Object.keys(groupMemberCounts).length} groups & teams.`, 'success');
 
     } catch (err) {
