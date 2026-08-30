@@ -271,14 +271,13 @@ async function loadProjectsList() {
   if (!org) return showModal('Please enter the Organization Name or URL first.', 'targetOrg');
   if (!pat) return showModal('Please enter your Personal Access Token (PAT).', 'targetPat');
 
-   // Show loading state while projects are being fetched.
-   const loadBtn = document.getElementById('btnLoadProjects');
+  const loadBtn = document.getElementById('btnLoadProjects');
    
-   if (loadBtn) {
-     loadBtn.disabled = true;
-     loadBtn.textContent = 'Loading projects...';
-     loadBtn.classList.add('loading');
-   }
+  if (loadBtn) {
+    loadBtn.disabled = true;
+    loadBtn.textContent = 'Loading projects...';
+    loadBtn.classList.add('loading');
+  }
 
   if (document.getElementById('chkRememberCreds').checked) {
     localStorage.setItem('azdo_org', org);
@@ -306,7 +305,7 @@ async function loadProjectsList() {
     enableDropdown('projectSelect');
     updateProjectRequirementUI();
     document.getElementById('step5Container').classList.add('hidden');
-    // Save Page 2 session so browser refresh can restore it.
+    
     sessionStorage.setItem('azdo_workspace_active', 'true');
     sessionStorage.setItem('azdo_session_org', org);
     sessionStorage.setItem('azdo_session_pat', pat);
@@ -340,16 +339,12 @@ function switchToOrganizationServiceAgents() {
   const projectSelect = document.getElementById('projectSelect');
   if (projectSelect) projectSelect.value = '';
 
-  // Always return to the first page (Azure DevOps Connection).
-  // Do not select or navigate to Service Connections & Agents here.
-  // The user can reconnect and then choose the desired workspace view.
   activeCategory = 'repositories';
   activeViewSection = 'view-repositories';
 
   const categorySelect = document.getElementById('categorySelect');
   if (categorySelect) categorySelect.value = 'repositories';
 
-  // Reset workspace state so the next connection starts cleanly.
   if (typeof resetServiceAgentsScope === 'function') resetServiceAgentsScope();
   if (typeof showSection === 'function') showSection('repositories');
   if (typeof configureServiceAgentsOverview === 'function') configureServiceAgentsOverview(false);
@@ -361,7 +356,6 @@ function switchToOrganizationServiceAgents() {
   const projectBadge = document.getElementById('overviewProjectBadge');
   if (projectBadge) projectBadge.textContent = '—';
 
-  // Credentials are intentionally preserved.
   showConnectionPage();
   setStatus('Returned to Azure DevOps Connection.', 'info');
 }
@@ -389,7 +383,6 @@ async function handleProjectSelection() {
   const projectBadge = document.getElementById('overviewProjectBadge');
   if (projectBadge) projectBadge.textContent = project || '—';
   
-  // Save selected project so browser refresh restores the same project.
   sessionStorage.setItem('azdo_session_project', project);
 
   const authHeader = 'Basic ' + btoa(':' + pat);
@@ -447,14 +440,12 @@ function showSection(viewId) {
 }
 
 function selectExplore(category) {
-  /* Save only the workspace that is actually loaded. */
   if (activeCategory && workspaceHasData(activeCategory)) {
     saveWorkspaceDisplayState(activeCategory);
   }
 
   activeCategory = category;
   
-  // Save selected workspace so browser refresh restores the same workspace.
   sessionStorage.setItem('azdo_session_category', category);
   
   updateProjectRequirementUI();
@@ -481,8 +472,6 @@ function selectExplore(category) {
   }
   renderActiveSubstep();
 
-  /* Restore this workspace's own KPI/chart display.
-     The rawStore data and tables are left untouched. */
   restoreWorkspaceDisplayState(category);
 }
 
@@ -554,7 +543,6 @@ function disconnectSession() {
   renderChart([], [], 'Overview');
   setConnectionBadge(false);
   
-  // Clear the Page 2 refresh session when the user disconnects.
   sessionStorage.removeItem('azdo_workspace_active');
   sessionStorage.removeItem('azdo_session_org');
   sessionStorage.removeItem('azdo_session_pat');
@@ -578,7 +566,6 @@ function filterActiveTable() {
 
     rows.forEach(r => {
       if (!isTarget) {
-        // If not in the chosen scope, keep standard visibility
         r.style.display = '';
       } else {
         const text = r.textContent.toLowerCase();
@@ -609,52 +596,71 @@ function exportToExcelFile(sheetsData, baseFileName) {
 }
 
 function exportCurrentTableToXLSX() {
+  const scope = document.getElementById('tableFilterScope')?.value || 'all';
+
   if (activeViewSection === 'view-repositories') {
-    // 1. All Branches
-    const branchData = (rawStore.repos || []).map(b => ({
-      "Repository": b.repo,
-      "Branch Name": b.branch,
-      "Status / Health": b.isStale ? "Stale" : "Active",
-      "Branch Policies": b.policies && b.policies.length ? b.policies.join(', ') : "None",
-      "Required Reviewers": b.minReviewers || 0,
-      "Last Author": b.author,
-      "Last Commit Date": b.date,
-      "Commit Message": b.msg
-    }));
+    const sheetsToExport = {};
+    let exportFileName = "AzureDevOps_Repositories_Full_Telemetry";
 
-    // 2. Branches with configured Policies only
-    const policyBranches = (rawStore.repos || []).filter(
-      b => b.hasPolicy === true && Array.isArray(b.policies) && b.policies.length > 0
-    );
-    const policyBranchData = policyBranches.map(b => ({
-      "Repository": b.repo,
-      "Branch Name": b.branch,
-      "Required Reviewers": b.minReviewers || 0,
-      "Branch Policies": b.policies.join(', '),
-      "Last Author": b.author || "Unknown",
-      "Last Commit Date": b.date || "N/A",
-      "Commit Message": b.msg || ""
-    }));
+    // 1. Repositories & Active Branch Matrix
+    if (scope === 'all' || scope === 'table-repositories') {
+      const branchData = (rawStore.repos || []).map(b => ({
+        "Repository": b.repo,
+        "Branch Name": b.branch,
+        "Status / Health": b.isStale ? "Stale" : "Active",
+        "Branch Policies": b.policies && b.policies.length ? b.policies.join(', ') : "None",
+        "Required Reviewers": b.minReviewers || 0,
+        "Last Author": b.author,
+        "Last Commit Date": b.date,
+        "Commit Message": b.msg
+      }));
+      sheetsToExport["All Branches"] = branchData;
+      if (scope === 'table-repositories') {
+        exportFileName = "AzureDevOps_Repositories_Active_Branches";
+      }
+    }
 
-    // 3. Pull Requests
-    const prData = (rawStore.repoPrs || []).map(p => ({
-      "Repository": p.repo,
-      "PR Title": p.title,
-      "Source Branch": p.source,
-      "Target Branch": p.target,
-      "Target Branch Policies": p.targetPolicies && p.targetPolicies.length ? p.targetPolicies.join(', ') : "None",
-      "Min Required Reviewers": p.minRequiredReviewers || 0,
-      "Assigned Reviewers": p.reviewersCount || 0,
-      "Creator": p.creator,
-      "Status": p.status,
-      "Created Date": p.createdDate
-    }));
+    // 2. Branches With Policies Only
+    if (scope === 'all' || scope === 'table-policy-branches') {
+      const policyBranches = (rawStore.repos || []).filter(
+        b => b.hasPolicy === true && Array.isArray(b.policies) && b.policies.length > 0
+      );
+      const policyBranchData = policyBranches.map(b => ({
+        "Repository": b.repo,
+        "Branch Name": b.branch,
+        "Required Reviewers": b.minReviewers || 0,
+        "Branch Policies": b.policies.join(', '),
+        "Last Author": b.author || "Unknown",
+        "Last Commit Date": b.date || "N/A",
+        "Commit Message": b.msg || ""
+      }));
+      sheetsToExport["Branches With Policies"] = policyBranchData;
+      if (scope === 'table-policy-branches') {
+        exportFileName = "AzureDevOps_Branches_With_Policies";
+      }
+    }
 
-    exportToExcelFile({
-      "All Branches": branchData,
-      "Branches With Policies": policyBranchData,
-      "Pull Requests": prData
-    }, "AzureDevOps_Repositories_Full_Telemetry");
+    // 3. Pull Requests (Active & Completed)
+    if (scope === 'all' || scope === 'table-repo-prs') {
+      const prData = (rawStore.repoPrs || []).map(p => ({
+        "Repository": p.repo,
+        "PR Title": p.title,
+        "Source Branch": p.source,
+        "Target Branch": p.target,
+        "Target Branch Policies": p.targetPolicies && p.targetPolicies.length ? p.targetPolicies.join(', ') : "None",
+        "Min Required Reviewers": p.minRequiredReviewers || 0,
+        "Assigned Reviewers": p.reviewersCount || 0,
+        "Creator": p.creator,
+        "Status": p.status,
+        "Created Date": p.createdDate
+      }));
+      sheetsToExport["Pull Requests"] = prData;
+      if (scope === 'table-repo-prs') {
+        exportFileName = "AzureDevOps_Pull_Requests";
+      }
+    }
+
+    exportToExcelFile(sheetsToExport, exportFileName);
   } 
   else if (activeViewSection === 'view-access') {
     const accessData = (rawStore.access || []).map(a => ({
@@ -665,7 +671,7 @@ function exportCurrentTableToXLSX() {
     }));
     exportToExcelFile({ "Access & Permissions": accessData }, "AzureDevOps_Security_Access");
   } 
-else if (activeViewSection === 'view-activity') {
+  else if (activeViewSection === 'view-activity') {
     const commitData = (rawStore.commits || []).map(c => ({
       "Repository": c.repo,
       "Branch": c.branch,
@@ -682,7 +688,7 @@ else if (activeViewSection === 'view-activity') {
       "Created Date": p.createdDate
     }));
     exportToExcelFile({ "User Commits": commitData, "User PRs": prData }, "AzureDevOps_User_Activity");
-  }
+  } 
   else if (activeViewSection === 'view-pipelines') {
     exportPipelinesToXLSX();
   } 
@@ -701,8 +707,6 @@ else if (activeViewSection === 'view-activity') {
     exportToExcelFile({ "Work Items": wiData }, "AzureDevOps_WorkItems");
   }
 }
-
-
 
 function changeChartType(type) {
   currentChartType = type.toLowerCase() === 'pie' ? 'pie' : type;
@@ -786,21 +790,16 @@ function renderChart(labels, data, datasetLabel) {
 }
 
 document.addEventListener('DOMContentLoaded', async function () {
-
-  // Load saved organization/PAT from browser storage.
   initCredentials();
 
-  // Check whether the user was already working on Page 2.
   const workspaceActive = sessionStorage.getItem('azdo_workspace_active');
 
   if (workspaceActive === 'true') {
-
     const savedOrg = sessionStorage.getItem('azdo_session_org');
     const savedPat = sessionStorage.getItem('azdo_session_pat');
     const savedProject = sessionStorage.getItem('azdo_session_project');
     const savedCategory = sessionStorage.getItem('azdo_session_category');
 
-    // Restore saved organization and PAT.
     if (savedOrg) {
       document.getElementById('targetOrg').value = savedOrg;
     }
@@ -809,37 +808,26 @@ document.addEventListener('DOMContentLoaded', async function () {
       document.getElementById('targetPat').value = savedPat;
     }
 
-    // Restore the Page 2 workspace.
     if (savedCategory) {
       activeCategory = savedCategory;
     }
 
-    // Load projects again so the project dropdown is available.
     if (savedOrg && savedPat) {
       await loadProjectsList();
 
-      // Restore the previously selected project.
       if (savedProject) {
         const projectSelect = document.getElementById('projectSelect');
-
         if (projectSelect) {
           projectSelect.value = savedProject;
         }
-
         await handleProjectSelection();
       }
 
-      // Restore the previously selected workspace.
       if (savedCategory) {
         selectExplore(savedCategory);
       }
     }
-
   } else {
-
-    // First visit: start with Repositories as the default workspace.
     selectExplore('repositories');
-
   }
-
 });
