@@ -1090,3 +1090,14 @@ table tbody tr:hover td,
 .dashboard-content table tbody tr:hover td {
   background-color: #e0f2fe !important; /* Tailwind sky-100 light blue */
 }
+
+/* ============================================================
+   REDUCE WATERMARK BRIGHTNESS & INTENSITY
+   ============================================================ */
+.dashboard-main::before,
+.dashboard-content::before,
+.app-shell::before,
+.workspace-page::before {
+  opacity: 0.12 !important; /* Lowers overall visibility */
+  filter: brightness(0.6) saturate(70%) !important; /* Dims brightness and color intensity */
+}
