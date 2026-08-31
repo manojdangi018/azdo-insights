@@ -717,6 +717,11 @@ Purpose: Controls the Project label, dropdown, spacing, and requirement message.
   color: #00d2ff !important;
 }
 
+/* Forces the asterisk to be bright red */
+.workspace-project-field > label #projectRequiredMark {
+  color: #ff5252 !important;
+}
+
 #projectRequirementText {
   color: #8ea8cf !important;
   font-size: 11px !important;
