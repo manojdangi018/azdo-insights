@@ -1088,7 +1088,7 @@ table tbody tr:hover,
 table tbody tr:hover td,
 .dashboard-content table tbody tr:hover,
 .dashboard-content table tbody tr:hover td {
-  background-color: #e0f2fe !important; /* Tailwind sky-100 light blue */
+  background-color: #f0f9ff !important; /* Tailwind sky-100 light blue */
 }
 
 /* ============================================================
@@ -1098,6 +1098,6 @@ table tbody tr:hover td,
 .dashboard-content::before,
 .app-shell::before,
 .workspace-page::before {
-  opacity: 0.12 !important; /* Lowers overall visibility */
-  filter: brightness(0.6) saturate(70%) !important; /* Dims brightness and color intensity */
+  opacity: 0.08 !important; /* Lowers overall visibility */
+  filter: brightness(0.5) saturate(70%) !important; /* Dims brightness and color intensity */
 }
