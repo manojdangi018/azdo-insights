@@ -1062,3 +1062,16 @@ Purpose: Main dark card containing project selection and service controls.
   height: 34px !important;
   color: #1e293b !important;
 }
+
+/* Brighter divider line */
+#step5Container {
+  border-top: 1px solid rgba(0, 210, 255, 0.45) !important;
+  box-shadow: 0 -1px 10px rgba(0, 210, 255, 0.2) !important;
+}
+
+/* Red asterisk for all sub-step labels */
+#step5Container label span.text-red-400,
+#step5Container label span.text-red-500,
+.workspace-project-field label #projectRequiredMark {
+  color: #ff5252 !important;
+}
