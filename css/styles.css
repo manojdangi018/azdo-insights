@@ -1075,3 +1075,37 @@ Purpose: Main dark card containing project selection and service controls.
 .workspace-project-field label #projectRequiredMark {
   color: #ff5252 !important;
 }
+
+/* ============================================================
+   SEMI-TRANSPARENT BRIGHT WHITE TABLES & CHARTS
+   ============================================================ */
+.dashboard-content .bg-white,
+#chartSection,
+#view-repositories .bg-white,
+#view-access .bg-white,
+#view-activity .bg-white,
+#view-pipelines .bg-white,
+#view-serviceagents .bg-white,
+#view-workitems .bg-white {
+  background-color: rgba(255, 255, 255, 0.92) !important;
+  backdrop-filter: blur(20px) brightness(1.25) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) brightness(1.25) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  box-shadow: 
+    0 10px 30px rgba(0, 0, 0, 0.25),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Bright header row */
+.dashboard-content table thead tr {
+  background-color: rgba(248, 250, 252, 0.9) !important;
+}
+
+/* Table rows */
+.dashboard-content table tbody tr {
+  background-color: transparent !important;
+}
+
+.dashboard-content table tbody tr:hover {
+  background-color: rgba(239, 246, 255, 0.7) !important;
+}
