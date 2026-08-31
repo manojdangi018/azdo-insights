@@ -1075,3 +1075,18 @@ Purpose: Main dark card containing project selection and service controls.
 .workspace-project-field label #projectRequiredMark {
   color: #ff5252 !important;
 }
+
+/* ============================================================
+   TABLE ROW HOVER HIGHLIGHT (LIGHT BLUE)
+   ============================================================ */
+table tbody tr {
+  transition: background-color 0.15s ease-in-out !important;
+  cursor: pointer;
+}
+
+table tbody tr:hover,
+table tbody tr:hover td,
+.dashboard-content table tbody tr:hover,
+.dashboard-content table tbody tr:hover td {
+  background-color: #e0f2fe !important; /* Tailwind sky-100 light blue */
+}
