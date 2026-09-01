@@ -408,6 +408,20 @@ function sortAccessRows(rows) {
   });
 }
 
+// Remove Azure DevOps project-scoped group prefix without constructing a dynamic RegExp.
+// Some project names contain regex-significant characters (and the previous
+// implementation could produce an invalid pattern such as ^\[EDS\]:\).
+function cleanAccessContainerName(value, project) {
+  const raw = String(value || '').trim();
+  const projectName = String(project || '').trim();
+  if (!raw || !projectName) return raw;
+
+  const prefix = `[${projectName}]\\`;
+  if (raw.startsWith(prefix)) return raw.slice(prefix.length);
+
+  return raw;
+}
+
 async function fetchProjectLevelAccess(context, org, project, authHeader) {
   const descriptorCache = new Map();
   const rows = [];
@@ -416,8 +430,10 @@ async function fetchProjectLevelAccess(context, org, project, authHeader) {
 
   await Promise.all([
     ...context.groups.map(async group => {
-      const groupName = String(group.displayName || group.principalName || 'Unnamed Group')
-        .replace(new RegExp(`^\[${String(project).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\]\\`), '');
+      const groupName = cleanAccessContainerName(
+        group.displayName || group.principalName || 'Unnamed Group',
+        project
+      );
       try {
         const users = uniqueAccessUsers(
           await expandGroupUsers(org, group.descriptor, authHeader, descriptorCache)
@@ -545,77 +561,125 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
     };
   }
 
-  // Optimization: do not download every group/team member just to find one user.
-  // Azure DevOps Graph supports upward membership traversal, which directly
-  // returns the containers the selected identity belongs to.
-  if (!resolvedUser.descriptor) {
-    // Rare legacy identity fallback: preserve the previously working exhaustive path.
-    const projectResult = await fetchProjectLevelAccess(context, org, project, authHeader);
-    const selected = new Set(
-      [resolvedUser.id, resolvedUser.originId, resolvedUser.email, resolvedUser.uniqueName, resolvedUser.principalName]
-        .map(v => String(v || '').trim().toLowerCase()).filter(Boolean)
-    );
-    const matchingRows = (projectResult.rows || []).filter(row =>
-      [row.id, row.originId, row.email, row.uniqueName, row.principalName]
-        .map(v => String(v || '').trim().toLowerCase()).some(v => v && selected.has(v))
-    );
-    return buildSpecificUserAccessResult(context, project, resolvedUser, matchingRows);
+  // Fast path: Graph upward memberships can avoid downloading every member.
+  // Some Azure DevOps organizations/identity types return 404 for this endpoint.
+  // In that case, fall back to the proven project-member path rather than failing
+  // the whole User Access operation.
+  if (resolvedUser.descriptor) {
+    try {
+      const membershipCache = new Map();
+      const normalize = value => String(value || '').trim().toLowerCase();
+      const projectTargetDescriptors = new Set([
+        ...(context.groups || []).map(g => g?.descriptor),
+        ...(context.teams || []).map(t => accessTeamDescriptor(t))
+      ].map(normalize).filter(Boolean));
+
+      const ancestorDescriptors = await collectUserAncestorDescriptors(
+        org,
+        resolvedUser.descriptor,
+        authHeader,
+        membershipCache,
+        projectTargetDescriptors,
+        3,
+        150
+      );
+      const ancestorKeys = new Set([...ancestorDescriptors].map(normalize).filter(Boolean));
+      const rows = [];
+      const groupCounts = {};
+      const teamMemberships = [];
+      const groupMemberships = [];
+
+      for (const group of (context.groups || [])) {
+        const descriptor = normalize(group.descriptor);
+        if (!descriptor || !ancestorKeys.has(descriptor)) continue;
+        const groupName = cleanAccessContainerName(
+          group.displayName || group.principalName || 'Unnamed Group',
+          project
+        );
+        groupCounts[groupName] = 1;
+        groupMemberships.push({ name: groupName, descriptor: group.descriptor, type: 'Group' });
+        rows.push(makeAccessRow(groupName, 'Group', resolvedUser));
+      }
+
+      for (const team of (context.teams || [])) {
+        const descriptor = normalize(accessTeamDescriptor(team));
+        if (!descriptor || !ancestorKeys.has(descriptor)) continue;
+        groupCounts[team.name] = 1;
+        teamMemberships.push({ name: team.name, id: team.id || '', type: 'Team' });
+        rows.push(makeAccessRow(team.name, 'Team', resolvedUser));
+      }
+
+      // Only use the fast-path result when it found at least one project
+      // membership. An empty result is ambiguous and is safer to verify using
+      // the authoritative member lists below.
+      if (rows.length) {
+        return buildSpecificUserAccessResult(
+          context,
+          project,
+          resolvedUser,
+          sortAccessRows(rows),
+          { groupCounts, teamMemberships, groupMemberships }
+        );
+      }
+    } catch (error) {
+      console.warn('[User Access] Upward membership lookup failed; using project-member fallback:', error);
+    }
   }
 
-  const membershipCache = new Map();
+  // Proven fallback: enumerate project groups/teams and match the resolved
+  // Azure DevOps identity by authoritative identity fields. This preserves the
+  // behavior of the working Identity Resolution V2 implementation.
+  const projectResult = await fetchProjectLevelAccess(context, org, project, authHeader);
   const normalize = value => String(value || '').trim().toLowerCase();
-  const projectTargetDescriptors = new Set([
-    ...(context.groups || []).map(g => g?.descriptor),
-    ...(context.teams || []).map(t => accessTeamDescriptor(t))
-  ].map(normalize).filter(Boolean));
-  const ancestorDescriptors = await collectUserAncestorDescriptors(
-    org,
-    resolvedUser.descriptor,
-    authHeader,
-    membershipCache,
-    projectTargetDescriptors,
-    3,
-    150
+  const selectedIds = new Set(
+    [resolvedUser.id, resolvedUser.originId, resolvedUser.descriptor]
+      .map(normalize).filter(Boolean)
   );
-  const ancestorKeys = new Set([...ancestorDescriptors].map(normalize).filter(Boolean));
-  const rows = [];
+  const selectedEmails = new Set(
+    [resolvedUser.mailAddress, resolvedUser.email, resolvedUser.uniqueName, resolvedUser.principalName]
+      .map(normalize).filter(Boolean)
+  );
+  const matchingRows = (projectResult.rows || []).filter(row => {
+    const rowIds = [row.id, row.originId, row.descriptor]
+      .map(normalize).filter(Boolean);
+    if (rowIds.some(id => selectedIds.has(id))) return true;
+    const rowEmails = [row.email, row.uniqueName, row.principalName]
+      .map(normalize).filter(Boolean);
+    return rowEmails.some(email => selectedEmails.has(email));
+  });
+
   const groupCounts = {};
   const teamMemberships = [];
   const groupMemberships = [];
-
-  const projectGroups = context.groups || [];
-  for (const group of projectGroups) {
-    const descriptor = normalize(group.descriptor);
-    if (!descriptor || !ancestorKeys.has(descriptor)) continue;
-    const groupName = String(group.displayName || group.principalName || 'Unnamed Group')
-      .replace(new RegExp(`^\\[${String(project).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&')}\\]\\\\`), '');
-    groupCounts[groupName] = 1;
-    groupMemberships.push({
-      name: groupName,
-      descriptor: group.descriptor,
-      type: 'Group'
-    });
-    rows.push(makeAccessRow(groupName, 'Group', resolvedUser));
-  }
-
-  const projectTeams = context.teams || [];
-  for (const team of projectTeams) {
-    const descriptor = normalize(accessTeamDescriptor(team));
-    if (!descriptor || !ancestorKeys.has(descriptor)) continue;
-    groupCounts[team.name] = 1;
-    teamMemberships.push({
-      name: team.name,
-      id: team.id || '',
-      type: 'Team'
-    });
-    rows.push(makeAccessRow(team.name, 'Team', resolvedUser));
+  for (const row of matchingRows) {
+    const containerName = String(row.team || 'Unnamed');
+    const type = String(row.type || 'Group');
+    groupCounts[containerName] = 1;
+    if (type === 'Team') {
+      if (!teamMemberships.some(x => x.name === containerName)) {
+        teamMemberships.push({
+          name: containerName,
+          id: context.teams.find(t => String(t.name) === containerName)?.id || '',
+          type: 'Team'
+        });
+      }
+    } else if (!groupMemberships.some(x => x.name === containerName)) {
+      const matchingGroup = context.groups.find(g =>
+        cleanAccessContainerName(g.displayName || g.principalName || '', project) === containerName
+      );
+      groupMemberships.push({
+        name: containerName,
+        descriptor: matchingGroup?.descriptor || '',
+        type: 'Group'
+      });
+    }
   }
 
   return buildSpecificUserAccessResult(
     context,
     project,
     resolvedUser,
-    sortAccessRows(rows),
+    sortAccessRows(matchingRows),
     { groupCounts, teamMemberships, groupMemberships }
   );
 }
