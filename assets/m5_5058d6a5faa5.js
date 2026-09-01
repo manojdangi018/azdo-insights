@@ -399,8 +399,38 @@ async function fetchProjectLevelAccess(context, org, project, authHeader) {
 }
 
 async function fetchSpecificUserAccess(context, org, project, userQuery, authHeader) {
-  const user = await resolveRequestedAccessUser(org, userQuery, authHeader);
-  if (!user) {
+  /*
+   * Specific-user mode deliberately uses the same verified project-level
+   * membership dataset as the project-level view.
+   *
+   * We do NOT call:
+   *   Graph Memberships/{userDescriptor}?direction=Up
+   *
+   * as the primary lookup because AAD-backed identities can legitimately
+   * return "Resource not found" for that descriptor even when the user is
+   * visibly present in a project security group/team.
+   *
+   * Instead:
+   *   1. Enumerate project groups and teams using the working project scan.
+   *   2. Resolve their members.
+   *   3. Filter those project-scoped rows for the requested identity.
+   *
+   * This guarantees that project mode and user mode are based on the same
+   * source of truth and prevents the previous "project data works but
+   * specific user returns 404/0" mismatch.
+   */
+
+  const projectResult = await fetchProjectLevelAccess(
+    context,
+    org,
+    project,
+    authHeader
+  );
+
+  const allRows = projectResult.rows || [];
+  const query = String(userQuery || '').trim();
+
+  if (!query) {
     return {
       user: null,
       rows: [],
@@ -411,135 +441,145 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
     };
   }
 
-  /*
-   * IMPORTANT:
-   * Do not use Graph Memberships/{userDescriptor}?direction=Up as the
-   * primary project-access lookup. AAD-backed identities can have a valid
-   * Identity descriptor while the Graph membership endpoint can return 404
-   * for that descriptor in some organizations. That made the old user mode
-   * fail even though project-level group enumeration worked.
-   *
-   * Project-level Graph groups + their expanded members are the authoritative
-   * source already used successfully by this page. Reuse that same source for
-   * user filtering. This also correctly handles nested groups.
-   */
-  const descriptorCache = new Map();
-  const rows = [];
-  const groupCounts = {};
-  const groupMemberships = [];
-  const teamMemberships = [];
+  const normalize = value => String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^['"]|['"]$/g, '');
 
-  function isSameUser(candidate) {
-    if (!candidate) return false;
+  const normalizedQuery = normalize(query);
+  const queryLocalPart = normalizedQuery.includes('@')
+    ? normalizedQuery.split('@')[0]
+    : normalizedQuery;
 
-    // Descriptor is the strongest match when both APIs expose it.
-    if (user.descriptor && candidate.descriptor &&
-        String(user.descriptor).toLowerCase() === String(candidate.descriptor).toLowerCase()) {
+  const matchesUser = row => {
+    const email = normalize(row?.email);
+    const name = normalize(row?.name);
+    const descriptor = normalize(row?.descriptor);
+
+    if (!email && !name && !descriptor) return false;
+
+    // Exact identity matches first.
+    if (
+      email === normalizedQuery ||
+      name === normalizedQuery ||
+      descriptor === normalizedQuery
+    ) {
       return true;
     }
 
-    // Email / UPN is the next strongest match. Avoid broad name matching here
-    // because duplicate display names are common in Azure AD.
-    const requestedEmail = normalizeIdentityText(user.email || '');
-    const candidateEmail = normalizeIdentityText(candidate.email || '');
-    if (requestedEmail && candidateEmail && requestedEmail === candidateEmail) {
-      return true;
+    // Reuse the application's existing identity matching rules.
+    if (typeof identityMatchesQuery === 'function') {
+      try {
+        if (identityMatchesQuery(query, {
+          displayName: row?.name,
+          mailAddress: row?.email,
+          uniqueName: row?.email,
+          descriptor: row?.descriptor
+        })) {
+          return true;
+        }
+      } catch (_) {}
     }
 
-    const requestedUnique = normalizeIdentityText(
-      user.uniqueName || user.principalName || user.email || userQuery || ''
-    );
-    const candidateUnique = normalizeIdentityText(
-      candidate.uniqueName || candidate.principalName || candidate.email || ''
-    );
-    if (requestedUnique && candidateUnique && requestedUnique === candidateUnique) return true;
-
-    // When the user entered an email/UPN, compare the original query directly
-    // as a final deterministic check. This handles AAD identities where the
-    // Graph object exposes a different display/identity property than the
-    // project team-members API.
-    const requestedQuery = normalizeIdentityText(userQuery || '');
-    if (requestedQuery.includes('@') && candidateEmail === requestedQuery) return true;
+    // Safe AAD email local-part fallback.
+    if (queryLocalPart && normalizedQuery.includes('@')) {
+      if (
+        email === queryLocalPart ||
+        email.startsWith(`${queryLocalPart}@`) ||
+        name === queryLocalPart ||
+        name.replace(/\s+/g, '.') === queryLocalPart
+      ) {
+        return true;
+      }
+    }
 
     return false;
+  };
+
+  const matchingRows = allRows.filter(matchesUser);
+
+  if (!matchingRows.length) {
+    // A valid Azure DevOps user may simply have no membership in this
+    // project. That is a normal result, not an API error.
+    let resolvedUser = null;
+    try {
+      resolvedUser = await resolveRequestedAccessUser(
+        org,
+        query,
+        authHeader
+      );
+    } catch (_) {}
+
+    return {
+      user: resolvedUser,
+      rows: [],
+      groupCounts: {},
+      teamMemberships: [],
+      groupMemberships: [],
+      userActive: resolvedUser ? true : null
+    };
   }
 
-  // 1. Project security groups: enumerate exactly the same groups used by
-  //    project-level mode, expand nested groups, then filter to this user.
-  for (const group of context.groups) {
-    const groupName = String(group.displayName || group.principalName || 'Unnamed Group')
-      .replace(new RegExp(`^\\[${String(project).replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\]\\\\`), '');
+  // Use the exact identity returned by the working project-level scan.
+  const representative = matchingRows[0];
+  const selectedUser = {
+    name: representative.name || query,
+    email: representative.email || query,
+    descriptor: representative.descriptor || ''
+  };
 
-    try {
-      const users = uniqueAccessUsers(
-        await expandGroupUsers(org, group.descriptor, authHeader, descriptorCache)
-      );
-      const match = users.find(isSameUser);
-      if (match) {
-        groupCounts[groupName] = 1;
-        groupMemberships.push({
-          name: groupName,
-          descriptor: group.descriptor,
-          type: 'Group'
-        });
-        rows.push(makeAccessRow(groupName, 'Group', user));
-      }
-    } catch (error) {
-      console.warn(`[User Access] Unable to evaluate group "${groupName}" for selected user:`, error);
-    }
-  }
+  const teamMemberships = [];
+  const groupMemberships = [];
+  const groupCounts = {};
 
-  // 2. Project teams: use the same team-member API as project-level mode and
-  //    match by descriptor/email. This catches team membership independently
-  //    of Graph group membership.
-  for (const team of context.teams) {
-    try {
-      const members = uniqueAccessUsers(
-        await fetchTeamMembers(org, project, team.id, authHeader)
-      );
-      const match = members.find(isSameUser);
-      if (match) {
-        groupCounts[team.name] = 1;
+  for (const row of matchingRows) {
+    const containerName = String(row.team || 'Unnamed');
+    const type = String(row.type || 'Group');
+
+    groupCounts[containerName] = 1;
+
+    if (type === 'Team') {
+      if (!teamMemberships.some(x => x.name === containerName)) {
         teamMemberships.push({
-          name: team.name,
-          id: team.id,
+          name: containerName,
+          id: context.teams.find(
+            t => String(t.name) === containerName
+          )?.id || '',
           type: 'Team'
         });
-        rows.push(makeAccessRow(team.name, 'Team', user));
       }
-    } catch (error) {
-      console.warn(`[User Access] Unable to evaluate team "${team.name}" for selected user:`, error);
-    }
-  }
+    } else {
+      if (!groupMemberships.some(x => x.name === containerName)) {
+        const matchingGroup = context.groups.find(g => {
+          const displayName = String(
+            g.displayName || g.principalName || ''
+          ).replace(
+            new RegExp(
+              `^\\[${String(project).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\\\`
+            ),
+            ''
+          );
+          return displayName === containerName;
+        });
 
-  /*
-   * Membership-state is useful when available, but it is not required to
-   * determine project access. Some AAD identities return 404 from this
-   * endpoint, so treat that as "not exposed" instead of failing the whole
-   * operation.
-   */
-  let userActive = null;
-  try {
-    const stateUrl =
-      `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
-      `/_apis/graph/membershipstates/${encodeURIComponent(user.descriptor)}` +
-      `?api-version=${ACCESS_GRAPH_API_VERSION}`;
-    const state = await fetchAzDo(stateUrl, authHeader);
-    if (typeof state?.active === 'boolean') userActive = state.active;
-  } catch (error) {
-    // A membership-state 404 must not turn a valid user-access result into an
-    // error. If the user has a project membership, the effective status is
-    // still Active for this dashboard; otherwise it remains Unknown.
-    if (rows.length) userActive = true;
+        groupMemberships.push({
+          name: containerName,
+          descriptor: matchingGroup?.descriptor || '',
+          type: 'Group'
+        });
+      }
+    }
   }
 
   return {
-    user,
-    rows: sortAccessRows(rows),
+    user: selectedUser,
+    rows: sortAccessRows(matchingRows),
     groupCounts,
     teamMemberships,
     groupMemberships,
-    userActive
+    // Current project membership is enough to report active project access.
+    // No artificial membership-added date is generated.
+    userActive: true
   };
 }
 
