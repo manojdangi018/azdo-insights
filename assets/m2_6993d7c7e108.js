@@ -26,6 +26,16 @@ agentPools: [],
 userEntitlements: [], userDirectoryIndex: 0
 };
 let workspaceDisplayStore = {};
+
+// Display state must be isolated by Azure DevOps workspace context.
+// A single category (for example, User Access) can be viewed for many
+// projects and user scopes, so using only the category as the key causes
+// one project's chart/KPIs to overwrite another project's state.
+function getWorkspaceContextKey(category = activeCategory) {
+  const org = extractOrgName(document.getElementById('targetOrg')?.value || '') || 'unknown-org';
+  const project = (document.getElementById('projectSelect')?.value || '').trim() || '__organization__';
+  return `${org.toLowerCase()}::${project.toLowerCase()}::${category || 'unknown'}`;
+}
 window.__getAzdoRawStore = () => rawStore;
 function sortByLatestDate(items, dateKeys = []) {
 if (!Array.isArray(items) || items.length < 2) return items;
@@ -100,7 +110,7 @@ className: value.className
 }
 const statusBarEl = document.getElementById('statusBar');
 const statusMsg = statusBarEl && !statusBarEl.classList.contains('hidden') ? statusBarEl.textContent : '';
-workspaceDisplayStore[category] = {
+workspaceDisplayStore[getWorkspaceContextKey(category)] = {
 kpis,
 statusMsg,
 chart: {
@@ -134,7 +144,7 @@ value.className = 'text-2xl font-extrabold text-slate-800 mt-1 truncate';
 }
 }
 function restoreWorkspaceDisplayState(category) {
-const state = workspaceDisplayStore[category];
+const state = workspaceDisplayStore[getWorkspaceContextKey(category)];
 if (!state) {
 setWorkspaceDefaultKpis(category);
 setStatus('');
@@ -389,10 +399,38 @@ if (projectBadge) projectBadge.textContent = '—';
 showConnectionPage();
 setStatus('Returned to Azure DevOps Connection.', 'info');
 }
+function resetDataForProjectContextChange() {
+  // Never allow data/chart state from the previous project to bleed into the
+  // newly selected project. The user can fetch each workspace again for the
+  // new project. This deliberately does not change connection/auth state.
+  rawStore = {
+    repos: [], repoIndex: 0,
+    repoPrs: [], repoPrsIndex: 0,
+    access: [], accessIndex: 0,
+    commits: [], commitsIndex: 0,
+    pipelines: [], pipelineIndex: 0,
+    pipelineSummaries: [], pipelineSummariesIndex: 0,
+    workitems: [], workitemsIndex: 0,
+    serviceConnections: [], serviceConnectionsIndex: 0,
+    agents: [], agentsIndex: 0,
+    agentPools: [],
+    userEntitlements: [], userDirectoryIndex: 0
+  };
+  cachedRepos = [];
+  workspaceDisplayStore = {};
+  currentChartData = { labels: [], values: [], label: 'Overview' };
+  currentChartType = 'bar';
+  if (typeof renderChart === 'function') renderChart([], [], 'Overview');
+}
+
 async function handleProjectSelection() {
 const org = extractOrgName(document.getElementById('targetOrg').value);
 const project = document.getElementById('projectSelect').value;
+const previousProject = sessionStorage.getItem('azdo_session_project') || '';
 const pat = document.getElementById('targetPat').value.trim();
+if (project !== previousProject) {
+  resetDataForProjectContextChange();
+}
 updateProjectRequirementUI();
 setStatus('');
 if (!project) {
