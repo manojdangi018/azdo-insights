@@ -333,6 +333,19 @@ const {
   ...fetchOptions
 } = options || {};
 const signal = providedSignal || getAzDoAbortSignal();
+const requestMethod = String(fetchOptions.method || 'GET').toUpperCase();
+const useCache = _cacheEnabled !== false && cacheMode !== 'no-store' && requestMethod === 'GET' && Number(_cacheTtlMs) > 0;
+const cacheTtlMs = Number(_cacheTtlMs) > 0 ? Number(_cacheTtlMs) : AZDO_API_CACHE_TTL_MS;
+const cacheKey = useCache ? azdoCacheKey(url, authHeader, requestMethod) : '';
+if (useCache) {
+  const cached = azdoCacheGet(cacheKey);
+  if (cached !== null) {
+    if (azdoApiRunActive && azdoApiRunState) {
+      azdoApiRunState.cacheHits = Number(azdoApiRunState.cacheHits || 0) + 1;
+    }
+    return cached;
+  }
+}
 let lastError = null;
 const maxAttempts = retry ? Math.max(1, Number(maxRetries) + 1) : 1;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
