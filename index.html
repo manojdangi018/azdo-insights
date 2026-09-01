@@ -176,16 +176,17 @@ Got it
 </button>
 
 <!-- 7. Organization & Project Users -->
-<button class="sidebar-item" data-view="advanced" onclick="selectExplore('advanced_analytics')">
-<span class="nav-icon" aria-hidden="true">◆</span><span>Advanced Analytics</span>
-</button>
-
 <button class="sidebar-item" data-view="users" onclick="selectExplore('users')">
 <span class="nav-icon" aria-hidden="true">
 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
 <path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm7-1a3 3 0 100-6 3 3 0 000 6zm4 11v-2a4 4 0 00-3-3.87" />
 </svg>
 </span><span>Organization &amp; Project Users</span>
+</button>
+
+<!-- Advanced Analytics is intentionally placed at the bottom of the workspace navigation -->
+<button class="sidebar-item" data-view="advanced" onclick="selectExplore('advanced_analytics')">
+<span class="nav-icon" aria-hidden="true">◆</span><span>Advanced Analytics</span>
 </button>
 </nav>
 
@@ -856,44 +857,65 @@ See More (<span id="workItemsRemainingCount">0</span> remaining)
     <div>
       <div class="eyebrow">05 · ADVANCED ANALYTICS</div>
       <h2>Engineering Health & Risk Dashboard</h2>
-      <p id="advancedAnalyticsMeta">Derived analytics from telemetry loaded by the existing workspaces.</p>
+      <p id="advancedAnalyticsMeta">A management-friendly summary of delivery health, reliability, security indicators and workload. Metrics are calculated from the telemetry loaded in the other workspaces.</p>
     </div>
     <div class="advanced-actions">
-      <select id="advancedAnalyticsDays" class="advanced-select" onchange="renderAdvancedAnalytics()">
+      <select id="advancedAnalyticsDays" class="advanced-select" onchange="renderAdvancedAnalytics()" aria-label="Analytics time window">
         <option value="30">Last 30 Days</option><option value="90" selected>Last 90 Days</option><option value="180">Last 180 Days</option><option value="365">Last 1 Year</option>
       </select>
       <button type="button" class="advanced-refresh" onclick="renderAdvancedAnalytics()">Refresh Analytics</button>
     </div>
   </div>
-  <div id="advancedAnalyticsNotice" class="advanced-notice">Load one or more workspaces first, then build Advanced Analytics.</div>
+
+  <div id="advancedAnalyticsNotice" class="advanced-notice">Load the relevant workspaces first. Advanced Analytics uses their loaded telemetry and clearly marks metrics that cannot be calculated.</div>
+
+  <div class="advanced-section-intro">
+    <div><strong>Executive summary</strong><span>Start here for the overall picture.</span></div>
+    <div class="advanced-legend"><span><i class="dot good"></i> Healthy</span><span><i class="dot warn"></i> Needs attention</span><span><i class="dot bad"></i> Action recommended</span><span><i class="dot neutral"></i> Not enough data</span></div>
+  </div>
 
   <div class="advanced-metric-grid">
-    <div class="advanced-metric"><span>Repository Health</span><strong id="advancedRepoScore">N/A</strong><small>/ 100 average</small></div>
-    <div class="advanced-metric"><span>Pipeline Health</span><strong id="advancedPipelineScore">N/A</strong><small>/ 100 average</small></div>
-    <div class="advanced-metric"><span>Branch Protection</span><strong id="advancedProtectionScore">N/A</strong><small>/ 100 coverage indicator</small></div>
-    <div class="advanced-metric"><span>PR Cycle Time</span><strong id="advancedPRCycle">N/A</strong><small>completed PRs</small></div>
-    <div class="advanced-metric"><span>PR Review Time</span><strong id="advancedPRReview">N/A</strong><small>first human response</small></div>
-    <div class="advanced-metric"><span>Work Item Aging</span><strong id="advancedWorkAging">N/A</strong><small>average open-item age</small></div>
-    <div class="advanced-metric"><span>Agent Utilization</span><strong id="advancedAgentUtil">N/A</strong><small>current assignments</small></div>
-    <div class="advanced-metric"><span>Access Risk Indicators</span><strong id="advancedAccessRisk">0</strong><small>high-indicator users</small></div>
-    <div class="advanced-metric"><span>Inactive Users</span><strong id="advancedInactiveUsers">0</strong><small>directory status</small></div>
-    <div class="advanced-metric"><span>Unused Connections</span><strong id="advancedUnusedServices">0</strong><small>verified &gt; 90 days</small></div>
-    <div class="advanced-metric"><span>Developer Commits</span><strong id="advancedCommits">0</strong><small>selected time window</small></div>
-    <div class="advanced-metric"><span>Build Failures</span><strong id="advancedBuildFailures">0</strong><small>failed / canceled / partial</small></div>
+    <div class="advanced-metric" data-advanced-card="repo"><span>Repository Health</span><strong id="advancedRepoScore">N/A</strong><small id="advancedRepoScore-sub">Overall freshness + protection</small><p id="advancedRepoScore-help">Combines branch freshness, policy coverage and active PR health.</p></div>
+    <div class="advanced-metric" data-advanced-card="pipeline"><span>Pipeline Reliability</span><strong id="advancedPipelineScore">N/A</strong><small id="advancedPipelineScore-sub">Build success indicator</small><p id="advancedPipelineScore-help">Uses overall and recent successful build rates.</p></div>
+    <div class="advanced-metric" data-advanced-card="protection"><span>Branch Protection</span><strong id="advancedProtectionScore">N/A</strong><small id="advancedProtectionScore-sub">Policy coverage</small><p id="advancedProtectionScore-help">Percentage-based coverage indicator, not an Azure DevOps compliance certification.</p></div>
+    <div class="advanced-metric" data-advanced-card="cycle"><span>PR Cycle Time</span><strong id="advancedPRCycle">N/A</strong><small id="advancedPRCycle-sub">Completed PRs</small><p id="advancedPRCycle-help">Average time from PR creation to completion.</p></div>
+    <div class="advanced-metric" data-advanced-card="review"><span>PR Review Time</span><strong id="advancedPRReview">N/A</strong><small id="advancedPRReview-sub">First human response</small><p id="advancedPRReview-help">Average time to the first non-system review/comment.</p></div>
+    <div class="advanced-metric" data-advanced-card="aging"><span>Work Item Aging</span><strong id="advancedWorkAging">N/A</strong><small id="advancedWorkAging-sub">Open items</small><p id="advancedWorkAging-help">Average age of currently open work items.</p></div>
+    <div class="advanced-metric" data-advanced-card="agents"><span>Agent Utilization</span><strong id="advancedAgentUtil">N/A</strong><small id="advancedAgentUtil-sub">Current assignments</small><p id="advancedAgentUtil-help">Current assigned self-hosted agents ÷ enabled self-hosted agents.</p></div>
+    <div class="advanced-metric" data-advanced-card="risk"><span>Access Risk Indicators</span><strong id="advancedAccessRisk">0</strong><small id="advancedAccessRisk-sub">High indicators</small><p id="advancedAccessRisk-help">Heuristic indicators only; investigate before taking action.</p></div>
+    <div class="advanced-metric" data-advanced-card="inactive"><span>Inactive Users</span><strong id="advancedInactiveUsers">0</strong><small id="advancedInactiveUsers-sub">Directory status</small><p id="advancedInactiveUsers-help">Users whose directory status is not active.</p></div>
+    <div class="advanced-metric" data-advanced-card="unused"><span>Unused Connections</span><strong id="advancedUnusedServices">0</strong><small id="advancedUnusedServices-sub">Verified &gt; 90 days</small><p id="advancedUnusedServices-help">Only counted when Azure DevOps exposes last-used telemetry.</p></div>
+    <div class="advanced-metric" data-advanced-card="commits"><span>Developer Commits</span><strong id="advancedCommits">0</strong><small id="advancedCommits-sub">Selected time window</small><p id="advancedCommits-help">Commits found for the selected user/activity telemetry.</p></div>
+    <div class="advanced-metric" data-advanced-card="failures"><span>Build Failures / Other</span><strong id="advancedBuildFailures">0</strong><small id="advancedBuildFailures-sub">Selected run history</small><p id="advancedBuildFailures-help">Failed, canceled or partially succeeded runs in the selected window.</p></div>
+  </div>
+
+  <div class="advanced-card advanced-executive-card">
+    <div class="advanced-card-head"><h3>What needs attention?</h3><span>Prioritized from the loaded data</span></div>
+    <div id="advancedAttentionList" class="advanced-attention-list"><div class="advanced-attention-item neutral"><strong>Waiting for telemetry</strong><span>Refresh after loading the relevant workspaces.</span></div></div>
+  </div>
+
+  <div class="advanced-card advanced-guide-card">
+    <div class="advanced-card-head"><h3>How to read this dashboard</h3><span>Keep these definitions in mind</span></div>
+    <div class="advanced-guide-grid">
+      <div><strong>Health score</strong><p>A relative 0–100 indicator calculated by this application. It is not an official Azure DevOps score.</p></div>
+      <div><strong>Risk indicator</strong><p>A signal that deserves review. It does not prove a user or connection is unsafe.</p></div>
+      <div><strong>N/A</strong><p>There is not enough loaded or exposed data to calculate the metric reliably. N/A is preferable to guessing.</p></div>
+      <div><strong>Time window</strong><p>Trend metrics use the selected period. Some inventory metrics, such as branch protection, use the currently loaded inventory.</p></div>
+    </div>
   </div>
 
   <div class="advanced-chart-grid">
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Score</h3><span>Top repositories</span></div><div class="advanced-chart-wrap"><canvas id="advancedHealthChart"></canvas></div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Developer Activity Trends</h3><span>Commits vs PRs</span></div><div class="advanced-chart-wrap"><canvas id="advancedDeveloperChart"></canvas></div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Build Failure Trend</h3><span>Daily failures / other results</span></div><div class="advanced-chart-wrap"><canvas id="advancedFailureChart"></canvas></div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Work Item Aging</h3><span>Open item age buckets</span></div><div class="advanced-chart-wrap"><canvas id="advancedAgingChart"></canvas></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health</h3><span>Higher is better</span></div><div class="advanced-chart-wrap"><canvas id="advancedHealthChart"></canvas></div><div class="advanced-card-foot" id="advancedHealthSummary">Shows the repositories with the strongest calculated health indicators.</div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Developer Activity</h3><span>Daily commits and PRs</span></div><div class="advanced-chart-wrap"><canvas id="advancedDeveloperChart"></canvas></div><div class="advanced-card-foot">Use the trend to spot sustained activity changes rather than judging a single day.</div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Build Reliability Trend</h3><span>Failures / canceled / partial</span></div><div class="advanced-chart-wrap"><canvas id="advancedFailureChart"></canvas></div><div class="advanced-card-foot">A spike means more runs ended without a successful result on that day.</div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Open Work Item Aging</h3><span>Older items need attention</span></div><div class="advanced-chart-wrap"><canvas id="advancedAgingChart"></canvas></div><div class="advanced-card-foot" id="advancedAgingSummary">Shows how currently open work items are distributed by age.</div></div>
   </div>
 
-  <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Detail</h3><span>Freshness + protection + PR health</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Repository</th><th>Branches</th><th>Stale</th><th>Protected</th><th>Health</th></tr></thead><tbody id="advancedRepoHealthBody"></tbody></table></div></div>
-  <div class="advanced-card"><div class="advanced-card-head"><h3>Pipeline Health Detail</h3><span>Overall + recent success</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Pipeline</th><th>Runs</th><th>Success</th><th>Recent</th><th>Health</th></tr></thead><tbody id="advancedPipelineHealthBody"></tbody></table></div></div>
+  <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Detail</h3><span>Freshness + protection + PR health</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Repository</th><th>Branches</th><th>Stale</th><th>Protected</th><th>Freshness</th><th>Protection</th><th>Health</th></tr></thead><tbody id="advancedRepoHealthBody"></tbody></table></div></div>
+  <div class="advanced-card"><div class="advanced-card-head"><h3>Pipeline Reliability Detail</h3><span>Overall + recent success</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Pipeline</th><th>Runs</th><th>Success</th><th>Recent</th><th>Failures / Other</th><th>Health</th></tr></thead><tbody id="advancedPipelineHealthBody"></tbody></table></div></div>
   <div class="advanced-two-col">
-    <div class="advanced-card"><div class="advanced-card-head"><h3>User Access Risk Indicators</h3><span>Heuristic indicators only</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>User</th><th>Email</th><th>Memberships</th><th>Last Access</th><th>Indicator</th></tr></thead><tbody id="advancedRiskBody"></tbody></table></div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Service Connection Usage</h3><span>Verified only when API exposes last-used data</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Connection</th><th>Type</th><th>Usage</th><th>Last Used</th></tr></thead><tbody id="advancedServiceBody"></tbody></table></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>User Access Review Queue</h3><span>Heuristic indicators only</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>User</th><th>Email</th><th>Memberships</th><th>Last Access</th><th>Why review?</th><th>Indicator</th></tr></thead><tbody id="advancedRiskBody"></tbody></table></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Service Connection Usage</h3><span>Only verified last-used telemetry is classified</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Connection</th><th>Type</th><th>Usage</th><th>Last Used</th></tr></thead><tbody id="advancedServiceBody"></tbody></table></div></div>
   </div>
 </section>
 
