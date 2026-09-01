@@ -39,13 +39,66 @@ function accessIdentityName(identity = {}) {
     'Unknown';
 }
 
+/*
+ * Canonical identity model used by User Access.
+ *
+ * Important: id / originId / descriptor are authoritative Azure DevOps
+ * identity identifiers. Email/name are presentation and controlled fallback
+ * fields only. We intentionally do not use partial-name or email-local-part
+ * matching here because that can associate the wrong user with access.
+ */
 function accessIdentityObject(identity = {}, descriptor = '') {
+  const properties = identity.properties || {};
   return {
+    id: identity.id || identity.identityId || '',
+    originId: identity.originId || identity.origin || '',
+    descriptor: descriptor || identity.descriptor || '',
     name: accessIdentityName(identity),
     email: accessIdentityEmail(identity),
-    descriptor: descriptor || identity.descriptor || '',
+    uniqueName: identity.uniqueName || properties.Account?.$value || '',
+    principalName: identity.principalName || properties.Account?.$value || '',
+    mailAddress: identity.mailAddress || properties.Mail?.$value || '',
     subjectKind: identity.subjectKind || 'user'
   };
+}
+
+function accessIdentityKey(identity = {}) {
+  const normalize = value => String(value || '').trim().toLowerCase();
+  return normalize(identity.id) ||
+    normalize(identity.originId) ||
+    normalize(identity.descriptor) ||
+    normalize(identity.uniqueName) ||
+    normalize(identity.principalName) ||
+    normalize(identity.mailAddress) ||
+    normalize(identity.email) ||
+    '';
+}
+
+function accessIdentityExactFieldMatch(query, identity = {}) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return { matched: false, confidence: 0, method: 'none' };
+
+  const fields = [
+    ['id', identity.id],
+    ['descriptor', identity.descriptor],
+    ['originId', identity.originId],
+    ['mailAddress', identity.mailAddress],
+    ['email', identity.email],
+    ['uniqueName', identity.uniqueName],
+    ['principalName', identity.principalName]
+  ];
+
+  for (const [method, value] of fields) {
+    if (value && String(value).trim().toLowerCase() === q) {
+      return { matched: true, confidence: 100, method };
+    }
+  }
+
+  if (identity.name && String(identity.name).trim().toLowerCase() === q) {
+    return { matched: true, confidence: 90, method: 'displayName' };
+  }
+
+  return { matched: false, confidence: 0, method: 'none' };
 }
 
 async function resolveAccessIdentityByDescriptor(org, descriptor, authHeader, cache) {
@@ -53,7 +106,7 @@ async function resolveAccessIdentityByDescriptor(org, descriptor, authHeader, ca
   if (cache.has(descriptor)) return cache.get(descriptor);
 
   const promise = (async () => {
-    // Graph users are preview API.
+    // Graph users are preview API. Descriptor lookup is authoritative.
     try {
       const userUrl =
         `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
@@ -63,8 +116,7 @@ async function resolveAccessIdentityByDescriptor(org, descriptor, authHeader, ca
       if (user) return accessIdentityObject(user, descriptor);
     } catch (_) {}
 
-    // A member descriptor can also be another group. We resolve it so that
-    // nested project groups can be expanded rather than being shown as users.
+    // A member descriptor can also be another group.
     try {
       const groupUrl =
         `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
@@ -73,15 +125,15 @@ async function resolveAccessIdentityByDescriptor(org, descriptor, authHeader, ca
       const group = await fetchAzDo(groupUrl, authHeader);
       if (group) {
         return {
+          ...accessIdentityObject(group, descriptor),
           name: accessIdentityName(group),
           email: group.mailAddress || group.principalName || 'N/A',
-          descriptor,
           subjectKind: 'group'
         };
       }
     } catch (_) {}
 
-    // Stable Identities API is a useful final fallback for legacy AAD identities.
+    // Stable Identities API is a fallback for legacy/AAD-backed identities.
     try {
       const idUrl =
         `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/identities` +
@@ -89,14 +141,18 @@ async function resolveAccessIdentityByDescriptor(org, descriptor, authHeader, ca
         `&api-version=${AZDO_STABLE_API_VERSION}`;
       const idRes = await fetchAzDo(idUrl, authHeader);
       const val = idRes?.value?.[0];
-      if (val) return accessIdentityObject({
-        displayName: val.providerDisplayName || val.customDisplayName,
-        mailAddress:
-          val.properties?.Mail?.$value ||
-          val.properties?.Account?.$value ||
-          val.properties?.[ 'Mail Address' ]?.$value,
-        principalName: val.properties?.Account?.$value
-      }, descriptor);
+      if (val) {
+        return accessIdentityObject({
+          ...val,
+          displayName: val.providerDisplayName || val.customDisplayName || val.displayName,
+          mailAddress:
+            val.properties?.Mail?.$value ||
+            val.properties?.Account?.$value ||
+            val.properties?.['Mail Address']?.$value,
+          uniqueName: val.properties?.Account?.$value,
+          principalName: val.properties?.Account?.$value
+        }, descriptor);
+      }
     } catch (_) {}
 
     return null;
@@ -107,15 +163,17 @@ async function resolveAccessIdentityByDescriptor(org, descriptor, authHeader, ca
 }
 
 async function resolveRequestedAccessUser(org, query, authHeader) {
-  const variants = typeof buildIdentitySearchVariants === 'function'
-    ? buildIdentitySearchVariants(query)
-    : [String(query || '').trim()];
+  const rawQuery = String(query || '').trim();
+  if (!rawQuery) return null;
+
+  const variants = [rawQuery];
+  const normalized = rawQuery.toLowerCase();
+  if (normalized !== rawQuery) variants.push(normalized);
 
   const candidates = [];
-  const seenIds = new Set();
+  const seen = new Set();
 
   for (const variant of variants) {
-    if (!variant) continue;
     try {
       const url =
         `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/identities` +
@@ -124,11 +182,22 @@ async function resolveRequestedAccessUser(org, query, authHeader) {
         `&queryMembership=None` +
         `&api-version=${AZDO_STABLE_API_VERSION}`;
       const res = await fetchAzDo(url, authHeader);
+
       for (const item of (res?.value || [])) {
-        const key = item.id || item.descriptor || JSON.stringify(item);
-        if (!seenIds.has(key)) {
-          seenIds.add(key);
-          candidates.push(item);
+        const identity = accessIdentityObject({
+          ...item,
+          displayName: item.providerDisplayName || item.customDisplayName || item.displayName,
+          mailAddress:
+            item.properties?.Mail?.$value ||
+            item.properties?.['Mail Address']?.$value ||
+            item.properties?.Account?.$value,
+          uniqueName: item.properties?.Account?.$value,
+          principalName: item.properties?.Account?.$value
+        }, item.descriptor || '');
+        const key = accessIdentityKey(identity);
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          candidates.push(identity);
         }
       }
     } catch (_) {}
@@ -136,44 +205,46 @@ async function resolveRequestedAccessUser(org, query, authHeader) {
 
   if (!candidates.length) return null;
 
-  // Prefer an exact email/account/display-name match.
-  const exact = candidates.find(identity =>
-    typeof identityMatchesQuery === 'function'
-      ? identityMatchesQuery(query, {
-          displayName: identity.providerDisplayName || identity.customDisplayName,
-          mailAddress: identity.properties?.Mail?.$value,
-          uniqueName: identity.properties?.Account?.$value,
-          principalName: identity.properties?.Account?.$value,
-          descriptor: identity.descriptor
-        })
-      : true
-  );
+  const scored = candidates
+    .map(identity => ({ identity, match: accessIdentityExactFieldMatch(rawQuery, identity) }))
+    .filter(item => item.match.matched)
+    .sort((a, b) => b.match.confidence - a.match.confidence);
 
-  const chosen = exact || candidates[0];
-  const descriptor = chosen.descriptor;
-  if (!descriptor) return null;
+  if (!scored.length) return null;
 
-  let graphUser = null;
-  try {
-    const url =
-      `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
-      `/_apis/graph/users/${encodeURIComponent(descriptor)}` +
-      `?api-version=${ACCESS_GRAPH_API_VERSION}`;
-    graphUser = await fetchAzDo(url, authHeader);
-  } catch (_) {}
+  // Exact identifier/email wins. An exact display name is accepted only when
+  // it uniquely identifies one candidate; never choose an arbitrary result.
+  const top = scored[0];
+  const sameConfidence = scored.filter(x => x.match.confidence === top.match.confidence);
+  if (top.match.confidence === 90 && sameConfidence.length !== 1) return null;
 
-  const identity = accessIdentityObject(graphUser || {
-    displayName: chosen.providerDisplayName || chosen.customDisplayName,
-    mailAddress:
-      chosen.properties?.Mail?.$value ||
-      chosen.properties?.Account?.$value,
-    principalName: chosen.properties?.Account?.$value
-  }, descriptor);
+  const chosen = top.identity;
+  let resolved = chosen;
+
+  if (chosen.descriptor) {
+    try {
+      const graphUser = await resolveAccessIdentityByDescriptor(
+        org,
+        chosen.descriptor,
+        authHeader,
+        new Map()
+      );
+      if (graphUser && graphUser.subjectKind !== 'group') {
+        resolved = {
+          ...chosen,
+          ...graphUser,
+          id: chosen.id || graphUser.id || '',
+          originId: chosen.originId || graphUser.originId || '',
+          descriptor: chosen.descriptor || graphUser.descriptor || ''
+        };
+      }
+    } catch (_) {}
+  }
 
   return {
-    ...identity,
-    id: chosen.id || '',
-    descriptor
+    ...resolved,
+    confidence: top.match.confidence,
+    matchMethod: top.match.method
   };
 }
 
@@ -285,11 +356,7 @@ async function expandGroupUsers(org, groupDescriptor, authHeader, descriptorCach
 function uniqueAccessUsers(users) {
   const map = new Map();
   for (const user of users || []) {
-    const key = String(
-      user.descriptor ||
-      user.email ||
-      user.name
-    ).trim().toLowerCase();
+    const key = accessIdentityKey(user);
     if (!key) continue;
     if (!map.has(key)) map.set(key, user);
   }
@@ -309,12 +376,7 @@ async function fetchTeamMembers(org, project, teamId, authHeader) {
 
   return (result?.value || []).map(m => {
     const identity = m?.identity || m || {};
-    return {
-      name: accessIdentityName(identity),
-      email: accessIdentityEmail(identity),
-      descriptor: identity.descriptor || '',
-      subjectKind: 'user'
-    };
+    return accessIdentityObject(identity, identity.descriptor || '');
   });
 }
 
@@ -323,8 +385,12 @@ function makeAccessRow(containerName, type, user) {
     team: containerName,
     type,
     name: user.name || 'Unknown',
-    email: user.email || 'N/A',
-    descriptor: user.descriptor || ''
+    email: user.email || user.mailAddress || user.uniqueName || user.principalName || 'N/A',
+    descriptor: user.descriptor || '',
+    id: user.id || '',
+    originId: user.originId || '',
+    uniqueName: user.uniqueName || '',
+    principalName: user.principalName || ''
   };
 }
 
@@ -399,37 +465,7 @@ async function fetchProjectLevelAccess(context, org, project, authHeader) {
 }
 
 async function fetchSpecificUserAccess(context, org, project, userQuery, authHeader) {
-  /*
-   * Specific-user mode deliberately uses the same verified project-level
-   * membership dataset as the project-level view.
-   *
-   * We do NOT call:
-   *   Graph Memberships/{userDescriptor}?direction=Up
-   *
-   * as the primary lookup because AAD-backed identities can legitimately
-   * return "Resource not found" for that descriptor even when the user is
-   * visibly present in a project security group/team.
-   *
-   * Instead:
-   *   1. Enumerate project groups and teams using the working project scan.
-   *   2. Resolve their members.
-   *   3. Filter those project-scoped rows for the requested identity.
-   *
-   * This guarantees that project mode and user mode are based on the same
-   * source of truth and prevents the previous "project data works but
-   * specific user returns 404/0" mismatch.
-   */
-
-  const projectResult = await fetchProjectLevelAccess(
-    context,
-    org,
-    project,
-    authHeader
-  );
-
-  const allRows = projectResult.rows || [];
   const query = String(userQuery || '').trim();
-
   if (!query) {
     return {
       user: null,
@@ -441,93 +477,58 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
     };
   }
 
-  const normalize = value => String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/^['"]|['"]$/g, '');
+  // Resolve the requested person first using Azure DevOps identity records.
+  // We then match project membership rows by authoritative identifiers.
+  const resolvedUser = await resolveRequestedAccessUser(org, query, authHeader);
 
-  const normalizedQuery = normalize(query);
-  const queryLocalPart = normalizedQuery.includes('@')
-    ? normalizedQuery.split('@')[0]
-    : normalizedQuery;
-
-  const matchesUser = row => {
-    const email = normalize(row?.email);
-    const name = normalize(row?.name);
-    const descriptor = normalize(row?.descriptor);
-
-    if (!email && !name && !descriptor) return false;
-
-    // Exact identity matches first.
-    if (
-      email === normalizedQuery ||
-      name === normalizedQuery ||
-      descriptor === normalizedQuery
-    ) {
-      return true;
-    }
-
-    // Reuse the application's existing identity matching rules.
-    if (typeof identityMatchesQuery === 'function') {
-      try {
-        if (identityMatchesQuery(query, {
-          displayName: row?.name,
-          mailAddress: row?.email,
-          uniqueName: row?.email,
-          descriptor: row?.descriptor
-        })) {
-          return true;
-        }
-      } catch (_) {}
-    }
-
-    // Safe AAD email local-part fallback.
-    if (queryLocalPart && normalizedQuery.includes('@')) {
-      if (
-        email === queryLocalPart ||
-        email.startsWith(`${queryLocalPart}@`) ||
-        name === queryLocalPart ||
-        name.replace(/\s+/g, '.') === queryLocalPart
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
-  const matchingRows = allRows.filter(matchesUser);
-
-  if (!matchingRows.length) {
-    // A valid Azure DevOps user may simply have no membership in this
-    // project. That is a normal result, not an API error.
-    let resolvedUser = null;
-    try {
-      resolvedUser = await resolveRequestedAccessUser(
-        org,
-        query,
-        authHeader
-      );
-    } catch (_) {}
-
+  if (!resolvedUser) {
     return {
-      user: resolvedUser,
+      user: null,
       rows: [],
       groupCounts: {},
       teamMemberships: [],
       groupMemberships: [],
-      userActive: resolvedUser ? true : null
+      userActive: null
     };
   }
 
-  // Use the exact identity returned by the working project-level scan.
-  const representative = matchingRows[0];
-  const selectedUser = {
-    name: representative.name || query,
-    email: representative.email || query,
-    descriptor: representative.descriptor || ''
+  const projectResult = await fetchProjectLevelAccess(
+    context,
+    org,
+    project,
+    authHeader
+  );
+
+  const allRows = projectResult.rows || [];
+
+  const normalize = value => String(value || '').trim().toLowerCase();
+  const selectedIds = new Set(
+    [resolvedUser.id, resolvedUser.originId, resolvedUser.descriptor]
+      .map(normalize)
+      .filter(Boolean)
+  );
+  const selectedEmails = new Set(
+    [resolvedUser.mailAddress, resolvedUser.email, resolvedUser.uniqueName, resolvedUser.principalName]
+      .map(normalize)
+      .filter(Boolean)
+  );
+
+  const matchesResolvedIdentity = row => {
+    const rowIds = [row.id, row.originId, row.descriptor]
+      .map(normalize)
+      .filter(Boolean);
+
+    // Strongest match: Azure DevOps identity ID / origin ID / descriptor.
+    if (rowIds.some(id => selectedIds.has(id))) return true;
+
+    // Controlled fallback for membership payloads that omit identity IDs.
+    const rowEmails = [row.email, row.uniqueName, row.principalName]
+      .map(normalize)
+      .filter(Boolean);
+    return rowEmails.some(email => selectedEmails.has(email));
   };
 
+  const matchingRows = allRows.filter(matchesResolvedIdentity);
   const teamMemberships = [];
   const groupMemberships = [];
   const groupCounts = {};
@@ -535,51 +536,44 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
   for (const row of matchingRows) {
     const containerName = String(row.team || 'Unnamed');
     const type = String(row.type || 'Group');
-
     groupCounts[containerName] = 1;
 
     if (type === 'Team') {
       if (!teamMemberships.some(x => x.name === containerName)) {
         teamMemberships.push({
           name: containerName,
-          id: context.teams.find(
-            t => String(t.name) === containerName
-          )?.id || '',
+          id: context.teams.find(t => String(t.name) === containerName)?.id || '',
           type: 'Team'
         });
       }
-    } else {
-      if (!groupMemberships.some(x => x.name === containerName)) {
-        const matchingGroup = context.groups.find(g => {
-          const displayName = String(
-            g.displayName || g.principalName || ''
-          ).replace(
-            new RegExp(
-              `^\\[${String(project).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\\\`
-            ),
-            ''
-          );
-          return displayName === containerName;
-        });
+    } else if (!groupMemberships.some(x => x.name === containerName)) {
+      const matchingGroup = context.groups.find(g => {
+        const displayName = String(g.displayName || g.principalName || '').replace(
+          new RegExp(
+            `^\\[${String(project).replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')}\\]\\\\`
+          ),
+          ''
+        );
+        return displayName === containerName;
+      });
 
-        groupMemberships.push({
-          name: containerName,
-          descriptor: matchingGroup?.descriptor || '',
-          type: 'Group'
-        });
-      }
+      groupMemberships.push({
+        name: containerName,
+        descriptor: matchingGroup?.descriptor || '',
+        type: 'Group'
+      });
     }
   }
 
   return {
-    user: selectedUser,
+    user: resolvedUser,
     rows: sortAccessRows(matchingRows),
     groupCounts,
     teamMemberships,
     groupMemberships,
-    // Current project membership is enough to report active project access.
-    // No artificial membership-added date is generated.
-    userActive: true
+    userActive: true,
+    identityConfidence: resolvedUser.confidence,
+    identityMatchMethod: resolvedUser.matchMethod
   };
 }
 
@@ -684,7 +678,7 @@ async function fetchUserAccessData() {
     const summaryText = userQuery
       ? (
         result.user
-          ? `Found ${result.teamMemberships.length} team membership(s), ${result.groupMemberships.length} group membership(s), and ${accessRows.length} total project membership(s) for "${result.user.name}".`
+          ? `Found ${result.teamMemberships.length} team membership(s), ${result.groupMemberships.length} group membership(s), and ${accessRows.length} total project membership(s) for "${result.user.name}". Identity resolved by ${result.identityMatchMethod || 'authoritative identity'} (${result.identityConfidence || 0}% confidence).`
           : `No Azure DevOps identity matched "${userQuery}".`
       )
       : `Loaded ${result.totalTeams} teams, ${result.totalGroups} project groups, and ${result.totalMembers} unique project members.`;
