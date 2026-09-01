@@ -1,3 +1,8 @@
+// Azure DevOps Graph endpoints are preview-versioned even when the rest of the app uses stable 7.1 APIs.
+// Keep these versions local to this module so the global API version remains centralized for stable endpoints.
+const AZDO_GRAPH_API_VERSION = '7.1-preview.1';
+const AZDO_GRAPH_DESCRIPTOR_API_VERSION = '7.1';
+
 function accessNormalize(value) {
 return String(value ?? '').trim().toLowerCase();
 }
@@ -48,7 +53,7 @@ if (!descriptor) return null;
 if (cache.has(descriptor)) return cache.get(descriptor);
 let result = null;
 try {
-  const userUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/users/${encodeURIComponent(descriptor)}?api-version=${API_VERSION}`;
+  const userUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/users/${encodeURIComponent(descriptor)}?api-version=${AZDO_GRAPH_API_VERSION}`;
   const data = await fetchAzDo(userUrl, authHeader);
   if (data) result = {
     descriptor,
@@ -104,14 +109,14 @@ try {
   projectInfo = await fetchAzDo(projInfoUrl, authHeader);
   if (projectInfo?.id) {
     try {
-      const descUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/descriptors/${encodeURIComponent(projectInfo.id)}?api-version=${API_VERSION}`;
+      const descUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/descriptors/${encodeURIComponent(projectInfo.id)}?api-version=${AZDO_GRAPH_DESCRIPTOR_API_VERSION}`;
       const descData = await fetchAzDo(descUrl, authHeader);
       projectDescriptor = descData?.value || '';
     } catch (e) {}
   }
 
   const scopeParam = projectDescriptor ? `&scopeDescriptor=${encodeURIComponent(projectDescriptor)}` : '';
-  const groupsUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/groups?api-version=${API_VERSION}${scopeParam}`;
+  const groupsUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/groups?api-version=${AZDO_GRAPH_API_VERSION}${scopeParam}`;
   const teamsUrl = `https://dev.azure.com/${encodeURIComponent(org)}/_apis/projects/${encodeURIComponent(project)}/teams?$expandIdentity=true&$top=500&api-version=${API_VERSION}`;
   const [groupsData, teamsData] = await Promise.all([
     fetchAzDoPaged(groupsUrl, authHeader, { pageSize: 500 }),
@@ -134,7 +139,7 @@ try {
     // 1) Security-group membership: query the user's graph memberships upward.
     // This is the authoritative direction for "which groups is this user a member of?".
     try {
-      const membershipsUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/Memberships/${encodeURIComponent(targetUser.descriptor)}?direction=Up&depth=1&api-version=${API_VERSION}`;
+      const membershipsUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/Memberships/${encodeURIComponent(targetUser.descriptor)}?direction=Up&depth=1&api-version=${AZDO_GRAPH_API_VERSION}`;
       const memberships = await fetchAzDoPaged(membershipsUrl, authHeader, { pageSize: 500 });
       for (const membership of (memberships?.value || [])) {
         let group = groupByDescriptor.get(membership.containerDescriptor);
@@ -142,7 +147,7 @@ try {
         // This is important for project permission groups such as Deployment Team.
         if (!group) {
           try {
-            const groupUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/groups/${encodeURIComponent(membership.containerDescriptor)}?api-version=${API_VERSION}`;
+            const groupUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/groups/${encodeURIComponent(membership.containerDescriptor)}?api-version=${AZDO_GRAPH_API_VERSION}`;
             group = await fetchAzDo(groupUrl, authHeader);
           } catch (e) {}
         }
@@ -207,7 +212,7 @@ try {
   await Promise.all(graphGroups.map(async g => {
     const groupName = (g.displayName || g.principalName || 'Unnamed Group').replace(`[${project}]\\`, '');
     try {
-      const memUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/Memberships/${encodeURIComponent(g.descriptor)}?direction=Down&api-version=${API_VERSION}`;
+      const memUrl = `https://vssps.dev.azure.com/${encodeURIComponent(org)}/_apis/graph/Memberships/${encodeURIComponent(g.descriptor)}?direction=Down&api-version=${AZDO_GRAPH_API_VERSION}`;
       const memData = await fetchAzDoPaged(memUrl, authHeader, { pageSize: 500 });
       for (const m of (memData?.value || [])) {
         const identity = await resolveAccessDescriptor(m.memberDescriptor, org, authHeader, identityCache);
