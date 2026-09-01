@@ -8,7 +8,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="assets/s_c55696c73322.css" />
 </head>
 <body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
 
@@ -76,14 +76,14 @@ Got it
 <div class="field-group">
 <label>Personal Access Token <span>*</span></label>
 <input type="password" id="targetPat" placeholder="Enter PAT token">
-<small>PAT is used only from this browser session to call Azure DevOps APIs.</small>
+<small>PAT is used only in memory for this browser session and is never saved to browser storage.</small>
 </div>
 
 <div class="flex flex-col gap-2.5">
 <button id="btnLoadProjects" onclick="loadProjectsList()" class="btn-load-projects">Load projects</button>
 <label class="remember-toggle">
 <input type="checkbox" id="chkRememberCreds" onchange="toggleRememberCreds()">
-<span>Remember organization &amp; credentials</span>
+<span>Remember organization only</span>
 </label>
 </div>
 
@@ -174,6 +174,19 @@ Got it
 </svg>
 </span><span>User Access &amp; Permissions</span>
 </button>
+
+<!-- 7. Organization & Project Users -->
+<button class="sidebar-item" data-view="advanced" onclick="selectExplore('advanced_analytics')">
+<span class="nav-icon" aria-hidden="true">◆</span><span>Advanced Analytics</span>
+</button>
+
+<button class="sidebar-item" data-view="users" onclick="selectExplore('users')">
+<span class="nav-icon" aria-hidden="true">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+<path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zm7-1a3 3 0 100-6 3 3 0 000 6zm4 11v-2a4 4 0 00-3-3.87" />
+</svg>
+</span><span>Organization &amp; Project Users</span>
+</button>
 </nav>
 
 <div class="sidebar-connection-note">
@@ -208,7 +221,7 @@ Got it
 <label for="projectSelect">Project <span id="projectRequiredMark" aria-hidden="true">*</span></label>
 <select id="projectSelect" disabled onchange="handleProjectSelection()"><option value="">-- Load PAT first --</option></select>
 <div id="projectStatusMsg" class="text-xs font-semibold mt-1 hidden" style="color: #10b981;"></div>
-<div id="projectRequirementText" class="project-requirement-text">Project selection is required for Repositories, Access &amp; Teams, User Activity, Pipelines &amp; Builds, and Work Items.</div>
+<div id="projectRequirementText" class="project-requirement-text">Project selection is required for Repositories, Access &amp; Teams, User Activity, Pipelines &amp; Builds, and Work Items. User Directory and Service Connections can run at organization level.</div>
 </div>
 </div>
 <select id="categorySelect" class="hidden"><option value="">-- Choose Category --</option></select>
@@ -222,15 +235,22 @@ Got it
               <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
                 SELECT OR TYPE REPOSITORY <span class="text-red-400">*</span>
               </label>
-              <div class="flex gap-2">
+              <div class="flex gap-2 flex-wrap">
                 <input list="repoDatalist" id="repoSelect" 
                   placeholder="Type or select repository..." 
                   onfocus="this.value=''"
                   onblur="if(!this.value) this.value='-- All Repositories --'"
-                  class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                  class="flex-1 min-w-[220px] text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
                 <datalist id="repoDatalist"></datalist>
+                <select id="staleBranchThresholdDays" onchange="updateStaleBranchThresholdLabel()" title="Branches older than this number of days are flagged as stale" class="text-xs border border-blue-300 rounded-md px-2 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium">
+                  <option value="30">Stale &gt; 30 days</option>
+                  <option value="60">Stale &gt; 60 days</option>
+                  <option value="90" selected>Stale &gt; 90 days</option>
+                  <option value="180">Stale &gt; 180 days</option>
+                  <option value="365">Stale &gt; 365 days</option>
+                </select>
                 <button onclick="fetchRepositoryData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
-                  Fetch Deatils
+                  Fetch Details
                 </button>
               </div>
             </div>
@@ -294,6 +314,7 @@ Got it
               </label>
               <div class="flex gap-2">
                 <select id="pipelineRunsTop" class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium">
+                  <option value="5">Latest 5 Runs per Pipeline</option>
                   <option value="20" selected>Latest 20 Runs per Pipeline</option>
                   <option value="50">Latest 50 Runs per Pipeline</option>
                   <option value="100">Latest 100 Runs per Pipeline</option>
@@ -325,7 +346,27 @@ Got it
             </div>
           </div>
 
-          <!-- Step 5F: Work Items -->
+          <!-- Step 5F: Organization & Project Users -->
+          <div id="substepUsers" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+            <div>
+              <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
+                USER NAME / EMAIL <span class="font-normal" style="color: #8ea8cf;">(Optional)</span>
+              </label>
+              <div class="flex gap-2">
+                <input type="text" id="targetDirectoryUserQuery"
+                  placeholder="e.g. user@domain.com or First Last"
+                  class="w-full text-xs border border-blue-300 rounded-md px-3 py-2 bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium" />
+                <button onclick="fetchUserDirectoryData()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md transition flex-shrink-0">
+                  Fetch Users
+                </button>
+              </div>
+            </div>
+            <div id="userDirectoryScopeText" class="text-xs text-slate-400 pb-2">
+              Leave Project blank for organization-wide users, or select a project for project-level users and permissions.
+            </div>
+          </div>
+
+          <!-- Step 5G: Work Items -->
           <div id="substepWorkItems" class="hidden grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
             <div>
               <label class="block text-[11px] font-semibold mb-1" style="color: #c9d8ee;">
@@ -402,13 +443,14 @@ Got it
 </div>
 
 <!-- Universal Table Controls -->
-<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3">
+<div id="tableControls" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3">
 <div class="flex items-center gap-2 flex-grow max-w-xl">
 <select id="tableFilterScope" onchange="filterActiveTable()" class="text-xs border border-slate-300 rounded-md px-2.5 py-1.5 bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium">
   <option value="all">Filter: All Tables</option>
   <option value="table-repositories">Filter: Repositories &amp; Active Branch</option>
   <option value="table-policy-branches">Filter: Branches With Policies</option>
   <option value="table-repo-prs">Filter: Pull Requests</option>
+  <option value="table-users">Filter: Organization &amp; Project Users</option>
 </select>
 
 <input type="text" id="tableFilterInput" oninput="filterActiveTable()" placeholder="Quick filter displayed rows..." class="w-full text-xs border border-slate-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-blue-500 focus:outline-none" />
@@ -426,7 +468,7 @@ Export Full Telemetry (.xlsx)
 <div class="p-4 border-b border-slate-100 flex justify-between items-center">
 <div>
 <h3 class="font-bold text-slate-900 text-sm">Repositories & Active Branch Matrix</h3>
-<span class="text-xs text-slate-400">Branches older than 90 days are flagged as Stale</span>
+<span class="text-xs text-slate-400">Branches older than <span id="staleBranchThresholdLabel">90 days</span> are flagged as Stale</span>
 </div>
 <button onclick="exportBranchesToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -741,7 +783,43 @@ See More (<span id="agentsRemainingCount">0</span> remaining)
 </div>
 </section>
 
-<!-- VIEW 6: Work Items Table -->
+<!-- VIEW 6: Organization & Project Users -->
+<section id="view-users" class="hidden space-y-6">
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+<div class="p-4 border-b border-slate-100 flex justify-between items-center">
+<div>
+<h3 class="font-bold text-slate-900 text-sm">Organization &amp; Project User Directory</h3>
+<span id="userDirectoryTableSubtitle" class="text-xs text-slate-400">Organization scope: all users, licenses, dates and project access</span>
+</div>
+<button onclick="exportUserDirectoryToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
+Export Users (.xlsx)
+</button>
+</div>
+<table id="table-users" class="w-full text-left border-collapse text-sm">
+<thead id="userDirectoryTableHead">
+<tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-semibold">
+<th class="p-4">User Name</th>
+<th class="p-4">Email Address</th>
+<th class="p-4">Organization Access</th>
+<th class="p-4">Status</th>
+<th class="p-4">Date Added</th>
+<th class="p-4">Last Access</th>
+<th class="p-4">Project Access</th>
+</tr>
+</thead>
+<tbody id="userDirectoryTableBody" class="divide-y divide-slate-100">
+<tr><td colspan="7" class="p-4 text-center text-slate-400">Click "Fetch Users" to load organization user entitlements.</td></tr>
+</tbody>
+</table>
+<div id="seeMoreUserDirectoryContainer" class="hidden p-4 border-t border-slate-100 text-center">
+<button onclick="renderUserDirectoryTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
+See More (<span id="userDirectoryRemainingCount">0</span> remaining)
+</button>
+</div>
+</div>
+</section>
+
+<!-- VIEW 7: Work Items Table -->
 <section id="view-workitems" class="hidden space-y-4">
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
 <div class="p-4 border-b border-slate-100">
@@ -770,18 +848,70 @@ See More (<span id="workItemsRemainingCount">0</span> remaining)
 </div>
 </section>
 
+
+
+<!-- VIEW 8: Phase 5 Advanced Analytics -->
+<section id="view-advanced" class="hidden advanced-analytics-view space-y-6">
+  <div class="advanced-hero">
+    <div>
+      <div class="eyebrow">05 · ADVANCED ANALYTICS</div>
+      <h2>Engineering Health & Risk Dashboard</h2>
+      <p id="advancedAnalyticsMeta">Derived analytics from telemetry loaded by the existing workspaces.</p>
+    </div>
+    <div class="advanced-actions">
+      <select id="advancedAnalyticsDays" class="advanced-select" onchange="renderAdvancedAnalytics()">
+        <option value="30">Last 30 Days</option><option value="90" selected>Last 90 Days</option><option value="180">Last 180 Days</option><option value="365">Last 1 Year</option>
+      </select>
+      <button type="button" class="advanced-refresh" onclick="renderAdvancedAnalytics()">Refresh Analytics</button>
+    </div>
+  </div>
+  <div id="advancedAnalyticsNotice" class="advanced-notice">Load one or more workspaces first, then build Advanced Analytics.</div>
+
+  <div class="advanced-metric-grid">
+    <div class="advanced-metric"><span>Repository Health</span><strong id="advancedRepoScore">N/A</strong><small>/ 100 average</small></div>
+    <div class="advanced-metric"><span>Pipeline Health</span><strong id="advancedPipelineScore">N/A</strong><small>/ 100 average</small></div>
+    <div class="advanced-metric"><span>Branch Protection</span><strong id="advancedProtectionScore">N/A</strong><small>/ 100 coverage indicator</small></div>
+    <div class="advanced-metric"><span>PR Cycle Time</span><strong id="advancedPRCycle">N/A</strong><small>completed PRs</small></div>
+    <div class="advanced-metric"><span>PR Review Time</span><strong id="advancedPRReview">N/A</strong><small>first human response</small></div>
+    <div class="advanced-metric"><span>Work Item Aging</span><strong id="advancedWorkAging">N/A</strong><small>average open-item age</small></div>
+    <div class="advanced-metric"><span>Agent Utilization</span><strong id="advancedAgentUtil">N/A</strong><small>current assignments</small></div>
+    <div class="advanced-metric"><span>Access Risk Indicators</span><strong id="advancedAccessRisk">0</strong><small>high-indicator users</small></div>
+    <div class="advanced-metric"><span>Inactive Users</span><strong id="advancedInactiveUsers">0</strong><small>directory status</small></div>
+    <div class="advanced-metric"><span>Unused Connections</span><strong id="advancedUnusedServices">0</strong><small>verified &gt; 90 days</small></div>
+    <div class="advanced-metric"><span>Developer Commits</span><strong id="advancedCommits">0</strong><small>selected time window</small></div>
+    <div class="advanced-metric"><span>Build Failures</span><strong id="advancedBuildFailures">0</strong><small>failed / canceled / partial</small></div>
+  </div>
+
+  <div class="advanced-chart-grid">
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Score</h3><span>Top repositories</span></div><div class="advanced-chart-wrap"><canvas id="advancedHealthChart"></canvas></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Developer Activity Trends</h3><span>Commits vs PRs</span></div><div class="advanced-chart-wrap"><canvas id="advancedDeveloperChart"></canvas></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Build Failure Trend</h3><span>Daily failures / other results</span></div><div class="advanced-chart-wrap"><canvas id="advancedFailureChart"></canvas></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Work Item Aging</h3><span>Open item age buckets</span></div><div class="advanced-chart-wrap"><canvas id="advancedAgingChart"></canvas></div></div>
+  </div>
+
+  <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Detail</h3><span>Freshness + protection + PR health</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Repository</th><th>Branches</th><th>Stale</th><th>Protected</th><th>Health</th></tr></thead><tbody id="advancedRepoHealthBody"></tbody></table></div></div>
+  <div class="advanced-card"><div class="advanced-card-head"><h3>Pipeline Health Detail</h3><span>Overall + recent success</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Pipeline</th><th>Runs</th><th>Success</th><th>Recent</th><th>Health</th></tr></thead><tbody id="advancedPipelineHealthBody"></tbody></table></div></div>
+  <div class="advanced-two-col">
+    <div class="advanced-card"><div class="advanced-card-head"><h3>User Access Risk Indicators</h3><span>Heuristic indicators only</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>User</th><th>Email</th><th>Memberships</th><th>Last Access</th><th>Indicator</th></tr></thead><tbody id="advancedRiskBody"></tbody></table></div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Service Connection Usage</h3><span>Verified only when API exposes last-used data</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Connection</th><th>Type</th><th>Usage</th><th>Last Used</th></tr></thead><tbody id="advancedServiceBody"></tbody></table></div></div>
+  </div>
+</section>
+
 </div>
 </main>
 </div>
 
 <!-- Modular Scripts -->
-<script src="js/api.js"></script>
-<script src="js/app.js"></script>
-<script src="js/serviceagents.js"></script>
-<script src="js/repos.js"></script>
-<script src="js/access.js"></script>
-<script src="js/activity.js"></script>
-<script src="js/pipelines.js"></script>
-<script src="js/workitems.js"></script>
+<script src="assets/m1_5dee75f7117c.js"></script>
+<script src="assets/m2_6993d7c7e108.js"></script>
+<script src="assets/m3_3184062e0706.js"></script>
+<script src="assets/m4_4e7f1171efff.js"></script>
+<script src="assets/m5_5058d6a5faa5.js"></script>
+<script src="assets/m6_5a6529fb0cd5.js"></script>
+<script src="assets/m7_2b021bb8133f.js"></script>
+<script src="assets/m8_94a8478ccca5.js"></script>
+<script src="assets/m9_9eddd4881ee8.js"></script>
+<script src="assets/m10_db030ee8db9c.js"></script>
+<script src="assets/m11_advanced_analytics.js"></script>
 </body>
 </html>
