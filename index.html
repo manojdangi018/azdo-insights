@@ -276,7 +276,7 @@ Got it
               </div>
             </div>
             <div class="text-xs text-slate-400 pb-2">
-              Leave blank for <strong>project-level access</strong>, or specify an email/name to show that user's project team and security-group memberships.
+              Leave blank for <strong>project-level teams, security groups, and members</strong>, or specify an email/name to show only that user's project memberships.
             </div>
           </div>
 
@@ -574,7 +574,7 @@ See More (<span id="repoPrsRemainingCount">0</span> remaining)
 <div class="p-4 border-b border-slate-100 flex justify-between items-center">
 <div>
 <h3 class="font-bold text-slate-900 text-sm">Project Teams, Security Groups & Member Permissions</h3>
-<span class="text-xs text-slate-400">Project-level view shows all project teams/groups; user mode shows only the selected user's memberships.</span>
+<span class="text-xs text-slate-400">Includes Project Security Groups (Contributors, Admins, Readers) & Agile Teams</span>
 </div>
 <button onclick="exportAccessToXLSX()" class="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 shadow-sm">
 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
@@ -591,9 +591,12 @@ Export Access (.xlsx)
 </tr>
 </thead>
 <tbody id="accessTableBody" class="divide-y divide-slate-100">
-<tr><td colspan="4" class="p-4 text-center text-slate-400">Enter a User ID or click "Fetch User Access" to load access permissions.</td></tr>
+<tr><td colspan="4" class="p-4 text-center text-slate-400">Leave the user field blank for project-level access, or enter a user email/name to load that user's project team and security-group memberships.</td></tr>
 </tbody>
 </table>
+<div class="px-4 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-slate-100">
+Membership status is read from Azure DevOps Graph. Azure DevOps does not expose a reliable membership-added date through this API.
+</div>
 <div id="seeMoreAccessContainer" class="hidden p-4 border-t border-slate-100 text-center">
 <button onclick="renderAccessTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
 See More (<span id="accessRemainingCount">0</span> remaining)
