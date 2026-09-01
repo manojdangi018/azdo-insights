@@ -406,109 +406,99 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
       rows: [],
       groupCounts: {},
       teamMemberships: [],
-      groupMemberships: []
+      groupMemberships: [],
+      userActive: null
     };
   }
 
-  const projectGroupByDescriptor = new Map(
-    context.groups.map(g => [String(g.descriptor), g])
-  );
-
-  // Graph memberships are the authoritative source for group membership.
-  // Direction=Up returns containers in which the selected user is a member.
-  const membershipUrl =
-    `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
-    `/_apis/graph/Memberships/${encodeURIComponent(user.descriptor)}` +
-    `?direction=Up&api-version=${ACCESS_GRAPH_API_VERSION}`;
-
-  const membershipsResult = await fetchAzDoPaged(membershipUrl, authHeader, {
-    pageSize: 500,
-    maxPages: AZDO_API_MAX_PAGES
-  });
-
-  const directGroupDescriptors = new Set(
-    (membershipsResult?.value || [])
-      .map(m => m?.containerDescriptor)
-      .filter(d => projectGroupByDescriptor.has(String(d)))
-  );
-
-  // Traverse upward from project groups as well, so inherited/nested project
-  // groups can be represented without treating organization-wide groups as
-  // project groups unless they are explicitly connected to a project group.
-  const inheritedGroupDescriptors = new Set(directGroupDescriptors);
-
-  async function addParentProjectGroups(groupDescriptor, depth = 0) {
-    if (!groupDescriptor || depth >= 5) return;
-    try {
-      const parentUrl =
-        `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
-        `/_apis/graph/Memberships/${encodeURIComponent(groupDescriptor)}` +
-        `?direction=Up&api-version=${ACCESS_GRAPH_API_VERSION}`;
-      const parentResult = await fetchAzDoPaged(parentUrl, authHeader, {
-        pageSize: 500,
-        maxPages: AZDO_API_MAX_PAGES
-      });
-
-      for (const item of (parentResult?.value || [])) {
-        const parentDescriptor = String(item?.containerDescriptor || '');
-        if (!projectGroupByDescriptor.has(parentDescriptor)) continue;
-        if (inheritedGroupDescriptors.has(parentDescriptor)) continue;
-        inheritedGroupDescriptors.add(parentDescriptor);
-        await addParentProjectGroups(parentDescriptor, depth + 1);
-      }
-    } catch (_) {}
-  }
-
-  for (const descriptor of [...directGroupDescriptors]) {
-    await addParentProjectGroups(descriptor);
-  }
-
-  let userActive = null;
-  try {
-    const stateUrl =
-      `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
-      `/_apis/graph/membershipstates/${encodeURIComponent(user.descriptor)}` +
-      `?api-version=${ACCESS_GRAPH_API_VERSION}`;
-    const state = await fetchAzDo(stateUrl, authHeader);
-    if (typeof state?.active === 'boolean') userActive = state.active;
-  } catch (_) {}
-
+  /*
+   * IMPORTANT:
+   * Do not use Graph Memberships/{userDescriptor}?direction=Up as the
+   * primary project-access lookup. AAD-backed identities can have a valid
+   * Identity descriptor while the Graph membership endpoint can return 404
+   * for that descriptor in some organizations. That made the old user mode
+   * fail even though project-level group enumeration worked.
+   *
+   * Project-level Graph groups + their expanded members are the authoritative
+   * source already used successfully by this page. Reuse that same source for
+   * user filtering. This also correctly handles nested groups.
+   */
+  const descriptorCache = new Map();
   const rows = [];
   const groupCounts = {};
   const groupMemberships = [];
+  const teamMemberships = [];
 
-  for (const descriptor of inheritedGroupDescriptors) {
-    const group = projectGroupByDescriptor.get(descriptor);
-    if (!group) continue;
+  function isSameUser(candidate) {
+    if (!candidate) return false;
 
-    const groupName = String(group.displayName || group.principalName || 'Unnamed Group')
-      .replace(new RegExp(`^\\[${String(project).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\\\`), '');
+    // Descriptor is the strongest match when both APIs expose it.
+    if (user.descriptor && candidate.descriptor &&
+        String(user.descriptor).toLowerCase() === String(candidate.descriptor).toLowerCase()) {
+      return true;
+    }
 
-    groupCounts[groupName] = 1;
-    groupMemberships.push({
-      name: groupName,
-      descriptor,
-      type: 'Group'
-    });
+    // Email / UPN is the next strongest match. Avoid broad name matching here
+    // because duplicate display names are common in Azure AD.
+    const requestedEmail = normalizeIdentityText(user.email || '');
+    const candidateEmail = normalizeIdentityText(candidate.email || '');
+    if (requestedEmail && candidateEmail && requestedEmail === candidateEmail) {
+      return true;
+    }
 
-    rows.push(makeAccessRow(groupName, 'Group', user));
+    const requestedUnique = normalizeIdentityText(
+      user.uniqueName || user.principalName || user.email || userQuery || ''
+    );
+    const candidateUnique = normalizeIdentityText(
+      candidate.uniqueName || candidate.principalName || candidate.email || ''
+    );
+    if (requestedUnique && candidateUnique && requestedUnique === candidateUnique) return true;
+
+    // When the user entered an email/UPN, compare the original query directly
+    // as a final deterministic check. This handles AAD identities where the
+    // Graph object exposes a different display/identity property than the
+    // project team-members API.
+    const requestedQuery = normalizeIdentityText(userQuery || '');
+    if (requestedQuery.includes('@') && candidateEmail === requestedQuery) return true;
+
+    return false;
   }
 
-  const teamMemberships = [];
+  // 1. Project security groups: enumerate exactly the same groups used by
+  //    project-level mode, expand nested groups, then filter to this user.
+  for (const group of context.groups) {
+    const groupName = String(group.displayName || group.principalName || 'Unnamed Group')
+      .replace(new RegExp(`^\\[${String(project).replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\]\\\\`), '');
+
+    try {
+      const users = uniqueAccessUsers(
+        await expandGroupUsers(org, group.descriptor, authHeader, descriptorCache)
+      );
+      const match = users.find(isSameUser);
+      if (match) {
+        groupCounts[groupName] = 1;
+        groupMemberships.push({
+          name: groupName,
+          descriptor: group.descriptor,
+          type: 'Group'
+        });
+        rows.push(makeAccessRow(groupName, 'Group', user));
+      }
+    } catch (error) {
+      console.warn(`[User Access] Unable to evaluate group "${groupName}" for selected user:`, error);
+    }
+  }
+
+  // 2. Project teams: use the same team-member API as project-level mode and
+  //    match by descriptor/email. This catches team membership independently
+  //    of Graph group membership.
   for (const team of context.teams) {
     try {
-      const members = await fetchTeamMembers(org, project, team.id, authHeader);
-      const matches = members.filter(member =>
-        identityMatchesQuery(userQuery, {
-          displayName: member.name,
-          mailAddress: member.email,
-          uniqueName: member.email,
-          descriptor: member.descriptor
-        }) ||
-        (user.descriptor && member.descriptor === user.descriptor)
+      const members = uniqueAccessUsers(
+        await fetchTeamMembers(org, project, team.id, authHeader)
       );
-
-      if (matches.length) {
+      const match = members.find(isSameUser);
+      if (match) {
         groupCounts[team.name] = 1;
         teamMemberships.push({
           name: team.name,
@@ -517,7 +507,30 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
         });
         rows.push(makeAccessRow(team.name, 'Team', user));
       }
-    } catch (_) {}
+    } catch (error) {
+      console.warn(`[User Access] Unable to evaluate team "${team.name}" for selected user:`, error);
+    }
+  }
+
+  /*
+   * Membership-state is useful when available, but it is not required to
+   * determine project access. Some AAD identities return 404 from this
+   * endpoint, so treat that as "not exposed" instead of failing the whole
+   * operation.
+   */
+  let userActive = null;
+  try {
+    const stateUrl =
+      `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
+      `/_apis/graph/membershipstates/${encodeURIComponent(user.descriptor)}` +
+      `?api-version=${ACCESS_GRAPH_API_VERSION}`;
+    const state = await fetchAzDo(stateUrl, authHeader);
+    if (typeof state?.active === 'boolean') userActive = state.active;
+  } catch (error) {
+    // A membership-state 404 must not turn a valid user-access result into an
+    // error. If the user has a project membership, the effective status is
+    // still Active for this dashboard; otherwise it remains Unknown.
+    if (rows.length) userActive = true;
   }
 
   return {

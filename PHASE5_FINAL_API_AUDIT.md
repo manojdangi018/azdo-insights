@@ -43,3 +43,10 @@ Azure DevOps does not expose a reliable membership-added date in the Graph membe
 - Agent popup Build # and Status
 - Advanced Analytics at the bottom of navigation
 - Access XLSX export
+
+
+## User-specific 404 hardening
+
+User-specific access does not depend on `Graph Memberships/{userDescriptor}?direction=Up` as its primary source. The dashboard reuses the project-level Graph group enumeration and expanded group members, then filters by descriptor/email; project team membership is checked with the stable Teams members API. Membership-state lookup is optional and cannot fail the user-access operation.
+
+Graph endpoints use `7.1-preview.1`; stable non-Graph APIs use `7.1`.
