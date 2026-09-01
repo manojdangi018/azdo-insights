@@ -736,6 +736,11 @@ exportToExcelFile({ "Access & Permissions": accessData }, "AzureDevOps_Security_
 }
 
 function changeChartType(type) {
+if (activeViewSection === 'view-serviceagents') {
+currentChartType = 'bar';
+renderChart(currentChartData.labels, currentChartData.values, currentChartData.label);
+return;
+}
 currentChartType = type.toLowerCase() === 'pie' ? 'pie' : type;
 renderChart(currentChartData.labels, currentChartData.values, currentChartData.label);
 }
@@ -746,6 +751,7 @@ if (chartInstance) chartInstance.destroy();
 const palette = ['#3b82f6', '#10b981', '#6366f1', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16', '#f43f5e', '#a855f7'];
 const isPie = currentChartType === 'pie' || currentChartType === 'doughnut';
 const isLine = currentChartType === 'line';
+const isServiceAgentsChart = activeViewSection === 'view-serviceagents' && currentChartType === 'bar';
 if (typeof ChartDataLabels !== 'undefined') {
 Chart.register(ChartDataLabels);
 }
@@ -767,6 +773,7 @@ borderRadius: currentChartType === 'bar' ? 6 : 0
 options: {
 responsive: true,
 maintainAspectRatio: false,
+indexAxis: isServiceAgentsChart ? 'y' : 'x',
 layout: {
 padding: {
 top: isPie ? 10 : 25,
@@ -793,7 +800,21 @@ return value > 0 ? value : (isPie ? '' : '0');
 }
 }
 },
-scales: isPie ? {} : {
+scales: isPie ? {} : isServiceAgentsChart ? {
+x: {
+beginAtZero: true,
+grid: { color: '#f1f5f9' },
+ticks: { precision: 0 }
+},
+y: {
+grid: { display: false },
+ticks: {
+autoSkip: false,
+maxRotation: 0,
+minRotation: 0
+}
+}
+} : {
 y: {
 beginAtZero: true,
 grid: { color: '#f1f5f9' },

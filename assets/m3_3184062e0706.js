@@ -17,15 +17,52 @@ function configureServiceAgentsOverview(isActive) {
 const chartSection = document.getElementById('chartSection');
 const kpiGrid = document.querySelector('.kpi-grid');
 const cards = [1, 2, 3, 4, 5].map(i => document.getElementById(`kpi-card-${i}`));
-if (chartSection) chartSection.classList.toggle('hidden', isActive);
+if (chartSection) chartSection.classList.toggle('hidden', false);
 if (kpiGrid) kpiGrid.classList.toggle('serviceagents-kpi-grid', isActive);
 if (isActive) {
 cards.forEach((card, index) => { if (card) card.classList.toggle('hidden', index >= 3); });
 updateServiceAgentsOverview();
 updateServiceAgentsScopeText();
+updateServiceAgentsPoolChart();
+const title = document.getElementById('chartTitle');
+if (title) title.textContent = 'Agent Pool Inventory';
+const controls = document.querySelector('#chartSection .flex.items-center.gap-2');
+if (controls) controls.classList.add('hidden');
 } else {
 cards.forEach(card => { if (card) card.classList.remove('hidden'); });
 if (kpiGrid) kpiGrid.classList.remove('serviceagents-kpi-grid');
+const title = document.getElementById('chartTitle');
+if (title) title.textContent = 'Activity Overview';
+const controls = document.querySelector('#chartSection .flex.items-center.gap-2');
+if (controls) controls.classList.remove('hidden');
+}
+}
+function updateServiceAgentsPoolChart() {
+if (activeViewSection !== 'view-serviceagents') return;
+const pools = Array.isArray(rawStore.agentPools) ? rawStore.agentPools : [];
+const agents = Array.isArray(rawStore.agents) ? rawStore.agents : [];
+const validAgents = agents.filter(a => !a.isSyntheticHosted && a.name && a.name !== 'Unable to read agents');
+const counts = new Map();
+validAgents.forEach(agent => {
+const key = agent.poolId !== undefined && agent.poolId !== null ? String(agent.poolId) : `name:${agent.poolName || ''}`;
+counts.set(key, (counts.get(key) || 0) + 1);
+});
+const labels = [];
+const values = [];
+pools.forEach(pool => {
+const poolId = pool.id !== undefined && pool.id !== null ? String(pool.id) : '';
+const key = poolId ? poolId : `name:${pool.name || ''}`;
+labels.push(pool.name || `Pool ${pool.id}`);
+values.push(counts.get(key) || 0);
+});
+const chartHost = document.querySelector('#chartSection .h-64');
+if (chartHost) {
+const height = Math.max(320, Math.min(5000, labels.length * 30 + 80));
+chartHost.style.height = `${height}px`;
+}
+currentChartType = 'bar';
+if (typeof renderChart === 'function') {
+renderChart(labels, values, 'Agents per Pool');
 }
 }
 function updateServiceAgentsOverview() {
@@ -75,34 +112,17 @@ return `<span class="inline-flex items-center rounded-full px-2.5 py-1 text-[11p
 }
 async function fetchAgentsForPools(org, authHeader, pools, options = {}) {
 const projectScoped = options.projectScoped === true;
+const poolList = Array.isArray(pools) ? pools : [];
+const results = await Promise.all(poolList.map(async pool => {
 const rows = [];
-for (const pool of (pools || [])) {
-if (pool.isHosted === true) {
-rows.push({
-poolId: pool.id,
-queueId: pool.queueId ?? null,
-poolName: pool.name || `Pool ${pool.id}`,
-isHosted: 'Yes',
-poolType: pool.poolType || '—',
-name: 'Microsoft-hosted pool',
-status: 'Online',
-enabled: 'Yes',
-os: '—',
-version: '—',
-createdOn: '—',
-isSyntheticHosted: true,
-projectScoped
-});
-continue;
-}
 try {
 const agentsUrl = `https://dev.azure.com/${encodeURIComponent(org)}/_apis/distributedtask/pools/${encodeURIComponent(pool.id)}/agents?includeAssignedRequest=true&includeLastCompletedRequest=true&api-version=${AZDO_STABLE_API_VERSION}`;
 const agentData = await fetchAzDoPaged(agentsUrl, authHeader, { pageSize: 500 });
-const agents = agentData.value || [];
+const agents = Array.isArray(agentData.value) ? agentData.value : [];
 agents.forEach(agent => rows.push({
 poolId: pool.id,
 poolName: pool.name || `Pool ${pool.id}`,
-isHosted: 'No',
+isHosted: pool.isHosted === true ? 'Yes' : 'No',
 poolType: pool.poolType || '—',
 agentId: agent.id ?? null,
 name: agent.name || '—',
@@ -114,23 +134,51 @@ createdOn: agent.createdOn ? new Date(agent.createdOn).toLocaleString() : '—',
 rawCreatedTimestamp: agent.createdOn ? new Date(agent.createdOn).getTime() : null,
 assignedRequest: agent.assignedRequest || null,
 lastCompletedRequest: agent.lastCompletedRequest || null,
+isSyntheticHosted: false,
 projectScoped
 }));
+if (!agents.length) {
+// Keep a pool-level row so the pool remains visible in the table and chart,
+// while the chart still correctly reports the number of agents returned by the API as 0.
+rows.push({
+poolId: pool.id,
+poolName: pool.name || `Pool ${pool.id}`,
+isHosted: pool.isHosted === true ? 'Yes' : 'No',
+poolType: pool.poolType || '—',
+name: pool.isHosted === true ? 'No active agents exposed by API' : 'No agents',
+status: pool.isHosted === true ? 'Online' : '—',
+enabled: '—',
+os: '—',
+version: '—',
+createdOn: '—',
+rawCreatedTimestamp: null,
+assignedRequest: null,
+lastCompletedRequest: null,
+isSyntheticHosted: true,
+projectScoped
+});
+}
 } catch (error) {
 console.warn(`Could not fetch agents for pool ${pool.name || pool.id}:`, error);
 rows.push({
 poolId: pool.id,
 poolName: pool.name || `Pool ${pool.id}`,
-isHosted: 'No',
+isHosted: pool.isHosted === true ? 'Yes' : 'No',
 poolType: pool.poolType || '—',
 name: 'Unable to read agents',
 status: error.message || 'Access denied',
-enabled: '—', os: '—', version: '—', createdOn: '—', rawCreatedTimestamp: null, projectScoped
+enabled: '—', os: '—', version: '—', createdOn: '—', rawCreatedTimestamp: null,
+assignedRequest: null,
+lastCompletedRequest: null,
+isSyntheticHosted: true,
+projectScoped
 });
 }
-}
 return rows;
+}));
+return results.flat();
 }
+
 async function getProjectAgentPools(org, project, authHeader) {
 const projectInfoUrl = `https://dev.azure.com/${encodeURIComponent(org)}/_apis/projects/${encodeURIComponent(project)}?api-version=${AZDO_STABLE_API_VERSION}`;
 const queueUrl = `https://dev.azure.com/${encodeURIComponent(org)}/${encodeURIComponent(project)}/_apis/distributedtask/queues?$top=1000&api-version=${AZDO_STABLE_API_VERSION}`;
@@ -242,6 +290,7 @@ rawStore.agentsIndex = 0;
 renderServiceConnectionsTableBatch(false);
 renderAgentsTableBatch(false);
 updateServiceAgentsOverview();
+updateServiceAgentsPoolChart();
 const realAgentCount = rawStore.agents.filter(a => !a.isSyntheticHosted && a.name !== 'Unable to read agents').length;
 const hostedPoolCount = pools.filter(p => p.isHosted === true).length;
 stopFetching();
