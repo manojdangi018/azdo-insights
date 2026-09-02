@@ -31,9 +31,9 @@ let workspaceDisplayStore = {};
 // A single category (for example, User Access) can be viewed for many
 // projects and user scopes, so using only the category as the key causes
 // one project's chart/KPIs to overwrite another project's state.
-function getWorkspaceContextKey(category = activeCategory) {
-  const org = extractOrgName(document.getElementById('targetOrg')?.value || '') || 'unknown-org';
-  const project = (document.getElementById('projectSelect')?.value || '').trim() || '__organization__';
+function getWorkspaceContextKey(category = activeCategory, orgOverride, projectOverride) {
+  const org = extractOrgName(orgOverride ?? document.getElementById('targetOrg')?.value ?? '') || 'unknown-org';
+  const project = (projectOverride ?? document.getElementById('projectSelect')?.value ?? '').trim() || '__organization__';
   return `${org.toLowerCase()}::${project.toLowerCase()}::${category || 'unknown'}`;
 }
 window.__getAzdoRawStore = () => rawStore;
@@ -94,7 +94,7 @@ default:
 return false;
 }
 }
-function saveWorkspaceDisplayState(category) {
+function saveWorkspaceDisplayState(category, contextKeyOverride) {
 if (!category || !workspaceHasData(category)) return;
 const kpis = {};
 for (let i = 1; i <= 5; i++) {
@@ -110,7 +110,7 @@ className: value.className
 }
 const statusBarEl = document.getElementById('statusBar');
 const statusMsg = statusBarEl && !statusBarEl.classList.contains('hidden') ? statusBarEl.textContent : '';
-workspaceDisplayStore[getWorkspaceContextKey(category)] = {
+workspaceDisplayStore[contextKeyOverride || getWorkspaceContextKey(category)] = {
 kpis,
 statusMsg,
 chart: {
@@ -400,9 +400,9 @@ showConnectionPage();
 setStatus('Returned to Azure DevOps Connection.', 'info');
 }
 function resetDataForProjectContextChange() {
-  // Never allow data/chart state from the previous project to bleed into the
-  // newly selected project. The user can fetch each workspace again for the
-  // new project. This deliberately does not change connection/auth state.
+  // Clear fetched data for the newly selected project, but KEEP the keyed
+  // workspace display store. It contains independent chart/KPI state for
+  // other projects and must not be destroyed when the project changes.
   rawStore = {
     repos: [], repoIndex: 0,
     repoPrs: [], repoPrsIndex: 0,
@@ -417,7 +417,9 @@ function resetDataForProjectContextChange() {
     userEntitlements: [], userDirectoryIndex: 0
   };
   cachedRepos = [];
-  workspaceDisplayStore = {};
+  // Do not reset workspaceDisplayStore here. Its keys are
+  // organization + project + workspace, so retaining it is what keeps each
+  // workspace/project chart independent.
   currentChartData = { labels: [], values: [], label: 'Overview' };
   currentChartType = 'bar';
   if (typeof renderChart === 'function') renderChart([], [], 'Overview');
@@ -429,6 +431,14 @@ const project = document.getElementById('projectSelect').value;
 const previousProject = sessionStorage.getItem('azdo_session_project') || '';
 const pat = document.getElementById('targetPat').value.trim();
 if (project !== previousProject) {
+  // Preserve the currently visible workspace state under the PREVIOUS
+  // project key before the select element changes the active context.
+  if (previousProject && activeCategory && workspaceHasData(activeCategory)) {
+    saveWorkspaceDisplayState(
+      activeCategory,
+      getWorkspaceContextKey(activeCategory, org, previousProject)
+    );
+  }
   resetDataForProjectContextChange();
 }
 updateProjectRequirementUI();
@@ -776,10 +786,20 @@ exportToExcelFile({ "Access & Permissions": accessData }, "AzureDevOps_Security_
 function changeChartType(type) {
 if (activeViewSection === 'view-serviceagents') {
 currentChartType = 'bar';
-renderChart(currentChartData.labels, currentChartData.values, currentChartData.label);
-return;
+} else {
+currentChartType = type.toLowerCase() === 'pie' ? 'pie' : type.toLowerCase() === 'line' ? 'line' : 'bar';
 }
-currentChartType = type.toLowerCase() === 'pie' ? 'pie' : type;
+// Persist ONLY the current workspace/project chart preference. This prevents
+// changing Bar/Line/Pie in one workspace from changing another workspace.
+const key = getWorkspaceContextKey(activeCategory);
+const existing = workspaceDisplayStore[key] || { kpis: {}, statusMsg: '' };
+existing.chart = {
+  labels: Array.isArray(currentChartData?.labels) ? [...currentChartData.labels] : [],
+  values: Array.isArray(currentChartData?.values) ? [...currentChartData.values] : [],
+  label: currentChartData?.label || 'Overview',
+  type: currentChartType
+};
+workspaceDisplayStore[key] = existing;
 renderChart(currentChartData.labels, currentChartData.values, currentChartData.label);
 }
 function renderChart(labels, data, datasetLabel) {
