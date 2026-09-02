@@ -95,7 +95,8 @@ const authHeader = createBasicAuthHeader(pat);
 const entitlements = await fetchAllUserEntitlements(org, authHeader);
 const rows = entitlements.map(flattenUserEntitlement).filter(u => {
 if (!query) return true;
-return identityMatchesQuery(query, { displayName: u.name, mailAddress: u.email, uniqueName: u.email });
+const match = scoreIdentityMatch(query, { displayName: u.name, mailAddress: u.email, uniqueName: u.email });
+return match.matched && match.confidence >= (window.IDENTITY_MATCH_THRESHOLD || 88);
 });
 let scopedRows = rows;
 if (project) {

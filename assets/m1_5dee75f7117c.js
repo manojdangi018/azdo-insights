@@ -526,17 +526,89 @@ function getIdentityCandidates(identity = {}) {
   });
   return [...expanded];
 }
-function identityMatchesQuery(query, identity = {}) {
-  const q = normalizeIdentityText(query);
-  if (!q) return true;
-  const qTokens = q.split(/[\s._-]+/).filter(Boolean);
-  const candidates = getIdentityCandidates(identity);
-  if (candidates.some(c => c === q || c.includes(q))) return true;
-  if (q.includes('@')) {
-    const prefix = q.split('@')[0];
-    if (candidates.some(c => c === prefix || c.includes(prefix))) return true;
+/*
+ * Confidence-based identity matching.
+ *
+ * The old implementation treated partial string containment as a match. That
+ * is unsafe for identities because a query such as "man" can match multiple
+ * people, and a partial email/name can silently attribute activity to the wrong
+ * user. We keep the same public helper name for backward compatibility, but
+ * matching now delegates to an explicit score with a conservative threshold.
+ *
+ * Scores:
+ *   100  authoritative identity/email fields exact
+ *    95  display name exact
+ *    90  email/UPN local-part exact (query without @)
+ *    88  complete normalized name-token match
+ *     0  partial/fuzzy-only match (rejected)
+ */
+const IDENTITY_MATCH_THRESHOLD = 88;
+
+function scoreIdentityMatch(query, identity = {}) {
+  const rawQuery = String(query ?? '').trim();
+  const q = normalizeIdentityText(rawQuery);
+  if (!q) return { matched: true, confidence: 100, method: 'empty-query', query: q };
+
+  const normalize = value => normalizeIdentityText(value);
+  const exactFields = [
+    ['id', identity.id],
+    ['descriptor', identity.descriptor],
+    ['originId', identity.originId],
+    ['mailAddress', identity.mailAddress],
+    ['email', identity.email],
+    ['uniqueName', identity.uniqueName],
+    ['principalName', identity.principalName],
+    ['accountName', identity.accountName]
+  ];
+
+  for (const [method, value] of exactFields) {
+    const candidate = normalize(value);
+    if (candidate && candidate === q) {
+      return { matched: true, confidence: 100, method: `exact-${method}`, query: q };
+    }
   }
-  return qTokens.length > 1 && candidates.some(c => qTokens.every(token => c.includes(token)));
+
+  const displayNames = [identity.displayName, identity.name, identity.providerDisplayName, identity.customDisplayName]
+    .map(normalize)
+    .filter(Boolean);
+  if (displayNames.some(value => value === q)) {
+    return { matched: true, confidence: 95, method: 'exact-display-name', query: q };
+  }
+
+  // A username/local-part is a useful convenience only when the query is
+  // already the complete local-part. Never accept a substring of it.
+  if (!q.includes('@')) {
+    const emailFields = [identity.mailAddress, identity.email, identity.uniqueName, identity.principalName]
+      .map(normalize)
+      .filter(Boolean);
+    if (emailFields.some(value => value.includes('@') && value.split('@')[0] === q)) {
+      return { matched: true, confidence: 90, method: 'exact-email-local-part', query: q };
+    }
+  }
+
+  // Allow "First Last" vs "first.last"/"First-Last" without allowing a
+  // partial token such as "First" to match "First Last".
+  const queryTokens = q.split(/[\s._-]+/).filter(Boolean);
+  if (queryTokens.length >= 2) {
+    const queryTokenSet = [...new Set(queryTokens)].sort();
+    const tokenCandidates = [...displayNames, ...getIdentityCandidates(identity)]
+      .map(value => normalize(value))
+      .filter(Boolean);
+    for (const candidate of tokenCandidates) {
+      const candidateTokens = candidate.split(/[\s._-]+/).filter(Boolean);
+      if (candidateTokens.length !== queryTokenSet.length) continue;
+      if ([...new Set(candidateTokens)].sort().every((token, i) => token === queryTokenSet[i])) {
+        return { matched: true, confidence: 88, method: 'exact-name-tokens', query: q };
+      }
+    }
+  }
+
+  return { matched: false, confidence: 0, method: 'no-confident-match', query: q };
+}
+
+function identityMatchesQuery(query, identity = {}) {
+  const result = scoreIdentityMatch(query, identity);
+  return result.matched && result.confidence >= IDENTITY_MATCH_THRESHOLD;
 }
 function buildIdentitySearchVariants(query) {
   const q = String(query || '').trim();
@@ -555,6 +627,8 @@ function buildIdentitySearchVariants(query) {
 }
 window.normalizeIdentityText = normalizeIdentityText;
 window.getIdentityCandidates = getIdentityCandidates;
+window.IDENTITY_MATCH_THRESHOLD = IDENTITY_MATCH_THRESHOLD;
+window.scoreIdentityMatch = scoreIdentityMatch;
 window.identityMatchesQuery = identityMatchesQuery;
 window.buildIdentitySearchVariants = buildIdentitySearchVariants;
 window.fetchAzDoPaged = fetchAzDoPaged;
