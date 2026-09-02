@@ -1361,6 +1361,6 @@ font-size: 13px;
 
 /* Service Connections & Agents: pool inventory chart is sized from the number of pools. */
 #chartSection.serviceagents-chart-section .h-64 {
-height: 320px;
-min-height: 320px;
+height: 500px;
+min-height: 500px;
 }

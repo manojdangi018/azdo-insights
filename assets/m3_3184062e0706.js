@@ -55,10 +55,14 @@ const key = poolId ? poolId : `name:${pool.name || ''}`;
 labels.push(pool.name || `Pool ${pool.id}`);
 values.push(counts.get(key) || 0);
 });
+// Keep the Agent Pool chart on a stable, bounded canvas size.
+// Do not size the shared chart container from label count: that causes the
+// Service Connections workspace to grow vertically and can affect the layout
+// when switching workspaces. Pool names are handled by the X-axis tick labels.
 const chartHost = document.querySelector('#chartSection .h-64');
 if (chartHost) {
-const height = Math.max(320, Math.min(5000, labels.length * 30 + 80));
-chartHost.style.height = `${height}px`;
+chartHost.style.height = '500px';
+chartHost.style.minHeight = '500px';
 }
 currentChartType = 'bar';
 if (typeof renderChart === 'function') {
