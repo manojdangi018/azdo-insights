@@ -28,6 +28,42 @@ cards.forEach(card => { if (card) card.classList.remove('hidden'); });
 if (kpiGrid) kpiGrid.classList.remove('serviceagents-kpi-grid');
 }
 }
+function renderAgentPoolInventoryChart() {
+const pools = Array.isArray(rawStore.agentPools) ? rawStore.agentPools : [];
+const agents = Array.isArray(rawStore.agents) ? rawStore.agents : [];
+const labels = [];
+const values = [];
+const agentCounts = new Map();
+
+agents.forEach(agent => {
+if (!agent || agent.isSyntheticHosted || agent.name === 'Unable to read agents') return;
+const poolId = agent.poolId !== undefined && agent.poolId !== null ? String(agent.poolId) : '';
+if (!poolId) return;
+agentCounts.set(poolId, (agentCounts.get(poolId) || 0) + 1);
+});
+
+pools.forEach(pool => {
+if (!pool) return;
+const poolId = pool.id !== undefined && pool.id !== null ? String(pool.id) : '';
+const poolName = String(pool.name || `Pool ${poolId || '—'}`);
+let count;
+
+if (pool.isHosted === true) {
+const size = Number(pool.size);
+count = Number.isFinite(size) && size >= 0 ? size : (agentCounts.get(poolId) || 0);
+} else {
+count = agentCounts.get(poolId) || 0;
+}
+
+labels.push(poolName);
+values.push(count);
+});
+
+if (typeof renderChart === 'function') {
+renderChart(labels, values, 'Agent Count');
+}
+}
+
 function updateServiceAgentsOverview() {
 const serviceConnectionCount = (rawStore.serviceConnections || []).length;
 const validAgents = (rawStore.agents || []).filter(a => !a.isSyntheticHosted && a.name && a.name !== 'Unable to read agents');
@@ -242,6 +278,7 @@ rawStore.agentsIndex = 0;
 renderServiceConnectionsTableBatch(false);
 renderAgentsTableBatch(false);
 updateServiceAgentsOverview();
+renderAgentPoolInventoryChart();
 const realAgentCount = rawStore.agents.filter(a => !a.isSyntheticHosted && a.name !== 'Unable to read agents').length;
 const hostedPoolCount = pools.filter(p => p.isHosted === true).length;
 stopFetching();
