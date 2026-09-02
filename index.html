@@ -892,6 +892,13 @@ See More (<span id="workItemsRemainingCount">0</span> remaining)
     <div class="advanced-metric" data-advanced-card="failures"><span>Build Failures / Other</span><strong id="advancedBuildFailures">0</strong><small id="advancedBuildFailures-sub">Selected run history</small><p id="advancedBuildFailures-help">Failed, canceled or partially succeeded runs in the selected window.</p></div>
   </div>
 
+  <div class="advanced-chart-grid">
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health</h3><span>Higher is better</span></div><div class="advanced-chart-wrap"><canvas id="advancedHealthChart"></canvas></div><div class="advanced-card-foot" id="advancedHealthSummary">Shows the repositories with the strongest calculated health indicators.</div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Developer Activity</h3><span>Daily commits and PRs</span></div><div class="advanced-chart-wrap"><canvas id="advancedDeveloperChart"></canvas></div><div class="advanced-card-foot">Use the trend to spot sustained activity changes rather than judging a single day.</div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Build Reliability Trend</h3><span>Failures / canceled / partial</span></div><div class="advanced-chart-wrap"><canvas id="advancedFailureChart"></canvas></div><div class="advanced-card-foot">A spike means more runs ended without a successful result on that day.</div></div>
+    <div class="advanced-card"><div class="advanced-card-head"><h3>Open Work Item Aging</h3><span>Older items need attention</span></div><div class="advanced-chart-wrap"><canvas id="advancedAgingChart"></canvas></div><div class="advanced-card-foot" id="advancedAgingSummary">Shows how currently open work items are distributed by age.</div></div>
+  </div>
+
   <div class="advanced-card advanced-executive-card">
     <div class="advanced-card-head"><h3>What needs attention?</h3><span>Prioritized from the loaded data</span></div>
     <div id="advancedAttentionList" class="advanced-attention-list"><div class="advanced-attention-item neutral"><strong>Waiting for telemetry</strong><span>Refresh after loading the relevant workspaces.</span></div></div>
@@ -905,13 +912,6 @@ See More (<span id="workItemsRemainingCount">0</span> remaining)
       <div><strong>N/A</strong><p>There is not enough loaded or exposed data to calculate the metric reliably. N/A is preferable to guessing.</p></div>
       <div><strong>Time window</strong><p>Trend metrics use the selected period. Some inventory metrics, such as branch protection, use the currently loaded inventory.</p></div>
     </div>
-  </div>
-
-  <div class="advanced-chart-grid">
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health</h3><span>Higher is better</span></div><div class="advanced-chart-wrap"><canvas id="advancedHealthChart"></canvas></div><div class="advanced-card-foot" id="advancedHealthSummary">Shows the repositories with the strongest calculated health indicators.</div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Developer Activity</h3><span>Daily commits and PRs</span></div><div class="advanced-chart-wrap"><canvas id="advancedDeveloperChart"></canvas></div><div class="advanced-card-foot">Use the trend to spot sustained activity changes rather than judging a single day.</div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Build Reliability Trend</h3><span>Failures / canceled / partial</span></div><div class="advanced-chart-wrap"><canvas id="advancedFailureChart"></canvas></div><div class="advanced-card-foot">A spike means more runs ended without a successful result on that day.</div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Open Work Item Aging</h3><span>Older items need attention</span></div><div class="advanced-chart-wrap"><canvas id="advancedAgingChart"></canvas></div><div class="advanced-card-foot" id="advancedAgingSummary">Shows how currently open work items are distributed by age.</div></div>
   </div>
 
   <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Detail</h3><span>Freshness + protection + PR health</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Repository</th><th>Branches</th><th>Stale</th><th>Protected</th><th>Freshness</th><th>Protection</th><th>Health</th></tr></thead><tbody id="advancedRepoHealthBody"></tbody></table></div></div>

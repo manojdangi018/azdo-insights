@@ -1358,3 +1358,174 @@ font-size: 13px;
 .advanced-section-intro{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:4px 2px}.advanced-section-intro strong{display:block;font-size:15px;color:#0f172a;font-weight:900}.advanced-section-intro span{display:block;margin-top:2px;color:#64748b;font-size:11px}.advanced-legend{display:flex!important;gap:12px;align-items:center;flex-wrap:wrap}.advanced-legend>span{display:flex!important;align-items:center;gap:5px;font-size:10px!important;font-weight:800;color:#64748b!important}.dot{display:inline-block;width:8px;height:8px;border-radius:50%}.dot.good{background:#22c55e}.dot.warn{background:#f59e0b}.dot.bad{background:#ef4444}.dot.neutral{background:#94a3b8}.advanced-metric{position:relative;min-height:132px}.advanced-metric p{margin:8px 0 0;color:#64748b;font-size:10px;line-height:1.45}.advanced-metric strong{font-variant-numeric:tabular-nums}.advanced-metric.status-good{border-top:3px solid #22c55e}.advanced-metric.status-warn{border-top:3px solid #f59e0b}.advanced-metric.status-bad{border-top:3px solid #ef4444}.advanced-metric.status-neutral{border-top:3px solid #94a3b8}.advanced-executive-card{margin-top:2px}.advanced-attention-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:14px}.advanced-attention-item{border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;background:#f8fafc}.advanced-attention-item strong{display:block;font-size:12px;color:#0f172a}.advanced-attention-item span{display:block;margin-top:4px;font-size:11px;line-height:1.45;color:#64748b}.advanced-attention-item.good{border-left:4px solid #22c55e}.advanced-attention-item.warn{border-left:4px solid #f59e0b;background:#fffbeb}.advanced-attention-item.bad{border-left:4px solid #ef4444;background:#fef2f2}.advanced-attention-item.neutral{border-left:4px solid #94a3b8}.advanced-guide-card{background:#f8fafc}.advanced-guide-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:#e2e8f0}.advanced-guide-grid>div{background:#fff;padding:14px}.advanced-guide-grid strong{display:block;color:#0f172a;font-size:11px;font-weight:900}.advanced-guide-grid p{margin:6px 0 0;color:#64748b;font-size:10px;line-height:1.5}.advanced-card-foot{padding:8px 14px 12px;color:#64748b;font-size:10px;border-top:1px solid #edf2f7;line-height:1.4}.advanced-table th,.advanced-table td{white-space:nowrap}.advanced-table td:nth-child(1){white-space:normal}.advanced-table .advanced-badge{vertical-align:middle}
 @media (max-width:1100px){.advanced-guide-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.advanced-attention-list{grid-template-columns:1fr}.advanced-section-intro{align-items:flex-start;flex-direction:column}}
 @media (max-width:720px){.advanced-guide-grid{grid-template-columns:1fr}}
+
+
+/* Advanced Analytics — presentation refinement (UI only)
+   No telemetry, API, chart data, axis, or scoring logic changes. */
+.advanced-analytics-view {
+  gap: 18px;
+}
+.advanced-hero {
+  padding: 20px 24px;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(2, 12, 35, .18);
+}
+.advanced-hero h2 {
+  font-size: 26px;
+  letter-spacing: -.02em;
+}
+.advanced-hero p {
+  max-width: 900px;
+  line-height: 1.55;
+}
+.advanced-actions {
+  flex-shrink: 0;
+}
+.advanced-notice {
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.advanced-section-intro {
+  padding: 2px 2px 0;
+}
+.advanced-section-intro > div:first-child strong {
+  font-size: 16px;
+}
+.advanced-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.advanced-metric {
+  min-height: 116px;
+  padding: 15px 16px 13px;
+  border-radius: 13px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, .06);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.advanced-metric:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(15, 23, 42, .09);
+}
+.advanced-metric span {
+  font-size: 10px;
+  letter-spacing: .055em;
+}
+.advanced-metric strong {
+  font-size: 27px;
+  line-height: 1;
+  margin-top: 8px;
+}
+.advanced-metric small {
+  font-size: 10px;
+}
+.advanced-metric p {
+  margin-top: 7px;
+  font-size: 10px;
+  line-height: 1.35;
+  max-width: 95%;
+}
+.advanced-chart-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.advanced-chart-grid .advanced-card {
+  min-width: 0;
+}
+.advanced-chart-wrap {
+  height: 315px;
+  padding: 14px 16px 10px;
+}
+.advanced-card {
+  border-radius: 13px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, .055);
+}
+.advanced-card-head {
+  padding: 14px 17px;
+  min-height: 52px;
+}
+.advanced-card-head h3 {
+  font-size: 14px;
+}
+.advanced-card-head span {
+  font-size: 10px;
+}
+.advanced-card-foot {
+  padding: 9px 16px 12px;
+  font-size: 10px;
+}
+.advanced-executive-card {
+  margin-top: 0;
+}
+.advanced-attention-list {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+.advanced-attention-item {
+  min-height: 86px;
+  padding: 11px 12px;
+}
+.advanced-attention-item strong {
+  font-size: 11px;
+  line-height: 1.35;
+}
+.advanced-attention-item span {
+  font-size: 10px;
+  line-height: 1.4;
+}
+.advanced-guide-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.advanced-guide-grid > div {
+  min-height: 100px;
+  padding: 14px 16px;
+}
+.advanced-table-wrap {
+  max-height: 390px;
+  overflow: auto;
+}
+.advanced-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.advanced-table td,
+.advanced-table th {
+  padding: 10px 12px;
+}
+@media (max-width: 1250px) {
+  .advanced-metric-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .advanced-attention-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1100px) {
+  .advanced-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .advanced-chart-grid,
+  .advanced-two-col {
+    grid-template-columns: 1fr;
+  }
+  .advanced-guide-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .advanced-hero {
+    padding: 17px;
+  }
+  .advanced-hero h2 {
+    font-size: 21px;
+  }
+  .advanced-metric-grid,
+  .advanced-attention-list,
+  .advanced-guide-grid {
+    grid-template-columns: 1fr;
+  }
+  .advanced-chart-wrap {
+    height: 260px;
+  }
+}
