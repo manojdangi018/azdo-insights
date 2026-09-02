@@ -194,19 +194,22 @@ if (!ids.length) return [];
 const poolUrl = `https://dev.azure.com/${encodeURIComponent(org)}/_apis/distributedtask/pools?poolIds=${ids.map(encodeURIComponent).join(',')}&api-version=${AZDO_STABLE_API_VERSION}`;
 const poolData = await fetchAzDo(poolUrl, authHeader);
 const poolById = new Map((poolData.value || []).map(pool => [String(pool.id), pool]));
-return ids.map(id => {
-const ref = poolRefs.get(id);
-const pool = poolById.get(id) || {};
-return {
-...pool,
-id: Number(id),
-queueId: ref.queueId ?? pool.queueId ?? null,
-name: pool.name || ref.name || `Pool ${id}`,
-isHosted: pool.isHosted === true || ref.isHosted === true,
-poolType: pool.poolType || ref.poolType || '—',
-projectId: projectId
-};
-});
+return ids
+    .map(id => {
+        const ref = poolRefs.get(id);
+        const pool = poolById.get(id) || {};
+
+        return {
+            ...pool,
+            id: Number(id),
+            queueId: ref.queueId ?? pool.queueId ?? null,
+            name: pool.name || ref.name || `Pool ${id}`,
+            isHosted: pool.isHosted === true || ref.isHosted === true,
+            poolType: pool.poolType || ref.poolType || '—',
+            projectId: projectId
+        };
+    })
+    .filter(pool => pool.isLegacy !== true && pool.poolType === 'automation');
 }
 async function getOrganizationProjects() {
 const projectSelect = document.getElementById('projectSelect');
