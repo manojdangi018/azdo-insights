@@ -110,50 +110,16 @@ let azdoActiveAbortController = null;
 let azdoOperationSequence = 0;
 let azdoApiRunState = null;
 let azdoApiRunActive = false;
-let azdoWorkspaceDiagnostics = {};
-let azdoRequestSequence = 0;
 let azdoRequestQueue = [];
 let azdoActiveRequests = 0;
 
-function getAzDoWorkspaceLabel() {
-const labels = {
-  'view-repositories': 'Repositories & Branches',
-  'view-pipelines': 'Pipelines & Builds',
-  'view-serviceagents': 'Service Connections & Agents',
-  'view-workitems': 'Work Items',
-  'view-activity': 'User Activity',
-  'view-access': 'User Access & Permissions',
-  'view-users': 'Organization & Project Users',
-  'view-advanced': 'Advanced Analytics'
-};
-try {
-  if (typeof activeViewSection !== 'undefined' && labels[activeViewSection]) return labels[activeViewSection];
-} catch (_) {}
-return 'Azure DevOps Workspace';
-}
-
-function deriveAzDoOperation(url, method = 'GET') {
-try {
-  const parsed = new URL(url, window.location.href);
-  const marker = '/_apis/';
-  const idx = parsed.pathname.toLowerCase().indexOf(marker);
-  let path = idx >= 0 ? parsed.pathname.slice(idx + marker.length) : parsed.pathname;
-  path = path.replace(/\/+/, '/').replace(/\/(?:[0-9a-f]{8}-[0-9a-f-]{27,}|[0-9]+)(?=\/|$)/gi, '/{id}');
-  return `${String(method || 'GET').toUpperCase()} /_apis/${path.replace(/^\//, '')}`;
-} catch (_) {
-  return `${String(method || 'GET').toUpperCase()} Azure DevOps API request`;
-}
-}
-
-function beginAzDoOperation(workspace = '') {
+function beginAzDoOperation() {
 if (azdoActiveAbortController) azdoActiveAbortController.abort();
 azdoActiveAbortController = new AbortController();
 azdoOperationSequence += 1;
 azdoApiRunActive = true;
-const resolvedWorkspace = workspace || getAzDoWorkspaceLabel();
 azdoApiRunState = {
   id: azdoOperationSequence,
-  workspace: resolvedWorkspace,
   startedAt: Date.now(),
   requests: 0,
   succeeded: 0,
@@ -161,8 +127,7 @@ azdoApiRunState = {
   retries: 0,
   pages: 0,
   truncated: false,
-  cancelled: false,
-  requestDetails: []
+  cancelled: false
 };
 return azdoActiveAbortController;
 }
@@ -179,32 +144,11 @@ azdoActiveAbortController.abort();
 if (typeof setStatus === 'function') setStatus('The current Azure DevOps operation was cancelled.', 'info');
 return true;
 }
-function cloneAzDoDiagnosticState(state) {
-if (!state) return null;
-return {
-  ...state,
-  durationMs: Math.max(0, (state.completedAt || Date.now()) - state.startedAt),
-  failures: [...(state.failures || [])],
-  requestDetails: (state.requestDetails || []).map(r => ({ ...r }))
-};
-}
-function finalizeAzDoDiagnostics() {
-if (!azdoApiRunState) return null;
-azdoApiRunState.completedAt = Date.now();
-azdoApiRunState.durationMs = Math.max(0, azdoApiRunState.completedAt - azdoApiRunState.startedAt);
-azdoApiRunState.partial = Boolean(azdoApiRunState.failures.length || azdoApiRunState.truncated || azdoApiRunState.cancelled);
-azdoWorkspaceDiagnostics[azdoApiRunState.workspace || 'Azure DevOps Workspace'] = cloneAzDoDiagnosticState(azdoApiRunState);
-return azdoApiRunState;
-}
 function getAzDoApiRunState() {
-return cloneAzDoDiagnosticState(azdoApiRunState);
-}
-function getAzDoWorkspaceDiagnostics() {
-return Object.values(azdoWorkspaceDiagnostics).map(cloneAzDoDiagnosticState);
-}
-function getAzDoLatestWorkspaceDiagnostic(workspace = '') {
-const key = workspace || getAzDoWorkspaceLabel();
-return cloneAzDoDiagnosticState(azdoWorkspaceDiagnostics[key] || null);
+return azdoApiRunState ? {
+  ...azdoApiRunState,
+  failures: [...azdoApiRunState.failures]
+} : null;
 }
 function getAzDoPartialResultMessage() {
 const state = azdoApiRunState;
@@ -216,25 +160,13 @@ if (state.cancelled) parts.push('operation cancelled');
 if (!parts.length) return '';
 return ` Partial result: ${parts.join('; ')}.`;
 }
-function recordAzDoFailure(error, url, requestRecord = null) {
+function recordAzDoFailure(error, url) {
 if (!azdoApiRunActive || !azdoApiRunState) return;
-const failure = {
-  requestId: requestRecord?.id || null,
-  operation: requestRecord?.operation || deriveAzDoOperation(url),
+azdoApiRunState.failures.push({
   status: Number(error?.status || 0),
   message: String(error?.rawMessage || error?.message || 'Unknown error'),
-  url: String(url || error?.url || ''),
-  attempts: Number(error?.attempts || requestRecord?.attempts || 1),
-  retryable: error?.retryable === true
-};
-azdoApiRunState.failures.push(failure);
-if (requestRecord) {
-  requestRecord.outcome = error?.cancelled ? 'cancelled' : 'failed';
-  requestRecord.status = Number(error?.status || 0);
-  requestRecord.message = failure.message;
-  requestRecord.completedAt = Date.now();
-  requestRecord.durationMs = Math.max(0, requestRecord.completedAt - requestRecord.startedAt);
-}
+  url: String(url || error?.url || '')
+});
 }
 function sleep(ms, signal) {
 return new Promise((resolve, reject) => {
@@ -328,34 +260,15 @@ const {
   maxRetries = AZDO_API_MAX_RETRIES,
   timeoutMs = AZDO_API_DEFAULT_TIMEOUT_MS,
   signal: providedSignal = null,
-  operationName = '',
   ...fetchOptions
 } = options || {};
 const signal = providedSignal || getAzDoAbortSignal();
-const requestRecord = azdoApiRunActive && azdoApiRunState ? {
-  id: ++azdoRequestSequence,
-  operation: operationName || deriveAzDoOperation(url, fetchOptions.method || 'GET'),
-  method: String(fetchOptions.method || 'GET').toUpperCase(),
-  url: String(url || ''),
-  startedAt: Date.now(),
-  attempts: 0,
-  retries: 0,
-  status: null,
-  outcome: 'pending',
-  message: ''
-} : null;
-if (requestRecord) {
-  azdoApiRunState.requestDetails.push(requestRecord);
-  azdoApiRunState.requests += 1;
-}
 let lastError = null;
 const maxAttempts = retry ? Math.max(1, Number(maxRetries) + 1) : 1;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-  if (requestRecord) requestRecord.attempts = attempt;
   if (signal?.aborted) {
     const error = new AzureDevOpsApiError('Azure DevOps request cancelled.', 0, { cancelled: true, url, attempts: attempt });
     if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.cancelled = true;
-    if (requestRecord) { requestRecord.outcome = 'cancelled'; requestRecord.status = 0; requestRecord.message = error.message; requestRecord.completedAt = Date.now(); requestRecord.durationMs = requestRecord.completedAt - requestRecord.startedAt; }
     throw error;
   }
   await acquireAzDoRequestSlot(signal);
@@ -366,6 +279,7 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   signal?.addEventListener('abort', abortFromCaller, { once: true });
   if (timeoutMs > 0) timeoutId = setTimeout(() => { timedOut = true; timeoutController.abort(); }, timeoutMs);
   try {
+    if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.requests += 1;
     let res;
     try {
       res = await fetch(url, {
@@ -425,27 +339,19 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       Object.defineProperty(data, '__azdoStatus', { value: res.status, enumerable: false, configurable: true });
     } catch (_) {}
     if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.succeeded += 1;
-    if (requestRecord) {
-      requestRecord.status = res.status;
-      requestRecord.outcome = 'succeeded';
-      requestRecord.completedAt = Date.now();
-      requestRecord.durationMs = requestRecord.completedAt - requestRecord.startedAt;
-    }
     return data;
   } catch (error) {
     lastError = error;
     if (isAzDoCancellation(error)) {
       if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.cancelled = true;
-      if (requestRecord) { requestRecord.outcome = 'cancelled'; requestRecord.status = Number(error?.status || 0); requestRecord.message = String(error?.message || 'Request cancelled.'); requestRecord.completedAt = Date.now(); requestRecord.durationMs = requestRecord.completedAt - requestRecord.startedAt; }
       throw error;
     }
     const canRetry = retry && attempt < maxAttempts && (error?.retryable === true || isRetryableStatus(error?.status));
     if (!canRetry) {
-      recordAzDoFailure(error, url, requestRecord);
+      recordAzDoFailure(error, url);
       throw error;
     }
     if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.retries += 1;
-    if (requestRecord) requestRecord.retries += 1;
     await sleep(error?.retryDelayMs || getRetryDelayMs(null, attempt), signal);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -571,7 +477,4 @@ window.fetchAzDoPaged = fetchAzDoPaged;
 window.beginAzDoOperation = beginAzDoOperation;
 window.cancelAzDoOperation = cancelAzDoOperation;
 window.getAzDoApiRunState = getAzDoApiRunState;
-window.getAzDoWorkspaceDiagnostics = getAzDoWorkspaceDiagnostics;
-window.getAzDoLatestWorkspaceDiagnostic = getAzDoLatestWorkspaceDiagnostic;
 window.getAzDoPartialResultMessage = getAzDoPartialResultMessage;
-window.finalizeAzDoDiagnostics = finalizeAzDoDiagnostics;
