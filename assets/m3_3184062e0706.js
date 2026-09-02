@@ -17,7 +17,7 @@ function configureServiceAgentsOverview(isActive) {
 const chartSection = document.getElementById('chartSection');
 const kpiGrid = document.querySelector('.kpi-grid');
 const cards = [1, 2, 3, 4, 5].map(i => document.getElementById(`kpi-card-${i}`));
-if (chartSection) chartSection.classList.toggle('hidden', isActive);
+if (chartSection) chartSection.classList.remove('hidden');
 if (kpiGrid) kpiGrid.classList.toggle('serviceagents-kpi-grid', isActive);
 if (isActive) {
 cards.forEach((card, index) => { if (card) card.classList.toggle('hidden', index >= 3); });
