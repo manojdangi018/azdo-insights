@@ -177,7 +177,7 @@ fetchAzDoPaged(queueUrl, authHeader, { pageSize: 500 })
 const projectId = projectInfo.id ? String(projectInfo.id).toLowerCase() : '';
 const poolRefs = new Map();
 (queueData.value || []).forEach(queue => {
-if (projectId && queue.projectId && String(queue.projectId).toLowerCase() !== projectId) return;
+if (!projectId || !queue.projectId || String(queue.projectId).toLowerCase() !== projectId) return;
 const pool = queue.pool || {};
 if (pool.id !== undefined && pool.id !== null) {
 poolRefs.set(String(pool.id), {
