@@ -68,9 +68,9 @@ function updateServiceAgentsOverview() {
 const serviceConnectionCount = (rawStore.serviceConnections || []).length;
 const validAgents = (rawStore.agents || []).filter(a => !a.isSyntheticHosted && a.name && a.name !== 'Unable to read agents');
 const hostedPoolCount = (rawStore.agentPools || []).filter(p => p.isHosted === true).length;
-const selfHostedAgentCount = validAgents.filter(a => a.isHosted === 'No').length;
-const values = [serviceConnectionCount, hostedPoolCount, selfHostedAgentCount];
-const labels = ['Total Service Connections', 'Microsoft-hosted Pools', 'Self-hosted Agents'];
+const totalAgentPoolCount = (rawStore.agentPools || []).length;
+const values = [serviceConnectionCount, hostedPoolCount, totalAgentPoolCount];
+const labels = ['Total Service Connections', 'Microsoft-hosted Pools', 'Total Agent Pools'];
 const classes = [
 'text-2xl font-extrabold text-slate-800 mt-1 truncate',
 'text-2xl font-extrabold text-blue-600 mt-1',
