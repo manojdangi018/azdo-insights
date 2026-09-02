@@ -637,8 +637,6 @@ pr.id ||
 '',
 repo:
 r.name,
-repoId:
-r.id,
 title:
 pr.title ||
 'Untitled PR',

@@ -183,11 +183,6 @@ Got it
 </svg>
 </span><span>Organization &amp; Project Users</span>
 </button>
-
-<!-- Advanced Analytics is intentionally placed at the bottom of the workspace navigation -->
-<button class="sidebar-item" data-view="advanced" onclick="selectExplore('advanced_analytics')">
-<span class="nav-icon" aria-hidden="true">◆</span><span>Advanced Analytics</span>
-</button>
 </nav>
 
 <div class="sidebar-connection-note">
@@ -276,7 +271,7 @@ Got it
               </div>
             </div>
             <div class="text-xs text-slate-400 pb-2">
-              Leave blank for <strong>project-level teams, security groups, and members</strong>, or specify an email/name to show only that user's project memberships.
+              Leave blank to scan <strong>all project users</strong>, or specify an email/name to filter security roles.
             </div>
           </div>
 
@@ -444,7 +439,7 @@ Got it
 </div>
 
 <!-- Universal Table Controls -->
-<div id="tableControls" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3">
+<div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap justify-between items-center gap-3">
 <div class="flex items-center gap-2 flex-grow max-w-xl">
 <select id="tableFilterScope" onchange="filterActiveTable()" class="text-xs border border-slate-300 rounded-md px-2.5 py-1.5 bg-white text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium">
   <option value="all">Filter: All Tables</option>
@@ -591,12 +586,9 @@ Export Access (.xlsx)
 </tr>
 </thead>
 <tbody id="accessTableBody" class="divide-y divide-slate-100">
-<tr><td colspan="4" class="p-4 text-center text-slate-400">Leave the user field blank for project-level access, or enter a user email/name to load that user's project team and security-group memberships.</td></tr>
+<tr><td colspan="4" class="p-4 text-center text-slate-400">Enter a User ID or click "Fetch User Access" to load access permissions.</td></tr>
 </tbody>
 </table>
-<div class="px-4 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-slate-100">
-Membership status is read from Azure DevOps Graph. Azure DevOps does not expose a reliable membership-added date through this API.
-</div>
 <div id="seeMoreAccessContainer" class="hidden p-4 border-t border-slate-100 text-center">
 <button onclick="renderAccessTableBatch(true)" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-5 py-2 rounded-lg transition">
 See More (<span id="accessRemainingCount">0</span> remaining)
@@ -852,76 +844,6 @@ See More (<span id="workItemsRemainingCount">0</span> remaining)
 </div>
 </section>
 
-
-
-<!-- VIEW 8: Phase 5 Advanced Analytics -->
-<section id="view-advanced" class="hidden advanced-analytics-view space-y-6">
-  <div class="advanced-hero">
-    <div>
-      <div class="eyebrow">05 · ADVANCED ANALYTICS</div>
-      <h2>Engineering Health & Risk Dashboard</h2>
-      <p id="advancedAnalyticsMeta">A management-friendly summary of delivery health, reliability, security indicators and workload. Metrics are calculated from the telemetry loaded in the other workspaces.</p>
-    </div>
-    <div class="advanced-actions">
-      <select id="advancedAnalyticsDays" class="advanced-select" onchange="renderAdvancedAnalytics()" aria-label="Analytics time window">
-        <option value="30">Last 30 Days</option><option value="90" selected>Last 90 Days</option><option value="180">Last 180 Days</option><option value="365">Last 1 Year</option>
-      </select>
-      <button type="button" class="advanced-refresh" onclick="renderAdvancedAnalytics()">Refresh Analytics</button>
-    </div>
-  </div>
-
-  <div id="advancedAnalyticsNotice" class="advanced-notice">Load the relevant workspaces first. Advanced Analytics uses their loaded telemetry and clearly marks metrics that cannot be calculated.</div>
-
-  <div class="advanced-section-intro">
-    <div><strong>Executive summary</strong><span>Start here for the overall picture.</span></div>
-    <div class="advanced-legend"><span><i class="dot good"></i> Healthy</span><span><i class="dot warn"></i> Needs attention</span><span><i class="dot bad"></i> Action recommended</span><span><i class="dot neutral"></i> Not enough data</span></div>
-  </div>
-
-  <div class="advanced-metric-grid">
-    <div class="advanced-metric" data-advanced-card="repo"><span>Repository Health</span><strong id="advancedRepoScore">N/A</strong><small id="advancedRepoScore-sub">Overall freshness + protection</small><p id="advancedRepoScore-help">Combines branch freshness, policy coverage and active PR health.</p></div>
-    <div class="advanced-metric" data-advanced-card="pipeline"><span>Pipeline Reliability</span><strong id="advancedPipelineScore">N/A</strong><small id="advancedPipelineScore-sub">Build success indicator</small><p id="advancedPipelineScore-help">Uses overall and recent successful build rates.</p></div>
-    <div class="advanced-metric" data-advanced-card="protection"><span>Branch Protection</span><strong id="advancedProtectionScore">N/A</strong><small id="advancedProtectionScore-sub">Policy coverage</small><p id="advancedProtectionScore-help">Percentage-based coverage indicator, not an Azure DevOps compliance certification.</p></div>
-    <div class="advanced-metric" data-advanced-card="cycle"><span>PR Cycle Time</span><strong id="advancedPRCycle">N/A</strong><small id="advancedPRCycle-sub">Completed PRs</small><p id="advancedPRCycle-help">Average time from PR creation to completion.</p></div>
-    <div class="advanced-metric" data-advanced-card="review"><span>PR Review Time</span><strong id="advancedPRReview">N/A</strong><small id="advancedPRReview-sub">First human response</small><p id="advancedPRReview-help">Average time to the first non-system review/comment.</p></div>
-    <div class="advanced-metric" data-advanced-card="aging"><span>Work Item Aging</span><strong id="advancedWorkAging">N/A</strong><small id="advancedWorkAging-sub">Open items</small><p id="advancedWorkAging-help">Average age of currently open work items.</p></div>
-    <div class="advanced-metric" data-advanced-card="agents"><span>Agent Utilization</span><strong id="advancedAgentUtil">N/A</strong><small id="advancedAgentUtil-sub">Current assignments</small><p id="advancedAgentUtil-help">Current assigned self-hosted agents ÷ enabled self-hosted agents.</p></div>
-    <div class="advanced-metric" data-advanced-card="risk"><span>Access Risk Indicators</span><strong id="advancedAccessRisk">0</strong><small id="advancedAccessRisk-sub">High indicators</small><p id="advancedAccessRisk-help">Heuristic indicators only; investigate before taking action.</p></div>
-    <div class="advanced-metric" data-advanced-card="inactive"><span>Inactive Users</span><strong id="advancedInactiveUsers">0</strong><small id="advancedInactiveUsers-sub">Directory status</small><p id="advancedInactiveUsers-help">Users whose directory status is not active.</p></div>
-    <div class="advanced-metric" data-advanced-card="unused"><span>Unused Connections</span><strong id="advancedUnusedServices">0</strong><small id="advancedUnusedServices-sub">Verified &gt; 90 days</small><p id="advancedUnusedServices-help">Only counted when Azure DevOps exposes last-used telemetry.</p></div>
-    <div class="advanced-metric" data-advanced-card="commits"><span>Developer Commits</span><strong id="advancedCommits">0</strong><small id="advancedCommits-sub">Selected time window</small><p id="advancedCommits-help">Commits found for the selected user/activity telemetry.</p></div>
-    <div class="advanced-metric" data-advanced-card="failures"><span>Build Failures / Other</span><strong id="advancedBuildFailures">0</strong><small id="advancedBuildFailures-sub">Selected run history</small><p id="advancedBuildFailures-help">Failed, canceled or partially succeeded runs in the selected window.</p></div>
-  </div>
-
-  <div class="advanced-card advanced-executive-card">
-    <div class="advanced-card-head"><h3>What needs attention?</h3><span>Prioritized from the loaded data</span></div>
-    <div id="advancedAttentionList" class="advanced-attention-list"><div class="advanced-attention-item neutral"><strong>Waiting for telemetry</strong><span>Refresh after loading the relevant workspaces.</span></div></div>
-  </div>
-
-  <div class="advanced-card advanced-guide-card">
-    <div class="advanced-card-head"><h3>How to read this dashboard</h3><span>Keep these definitions in mind</span></div>
-    <div class="advanced-guide-grid">
-      <div><strong>Health score</strong><p>A relative 0–100 indicator calculated by this application. It is not an official Azure DevOps score.</p></div>
-      <div><strong>Risk indicator</strong><p>A signal that deserves review. It does not prove a user or connection is unsafe.</p></div>
-      <div><strong>N/A</strong><p>There is not enough loaded or exposed data to calculate the metric reliably. N/A is preferable to guessing.</p></div>
-      <div><strong>Time window</strong><p>Trend metrics use the selected period. Some inventory metrics, such as branch protection, use the currently loaded inventory.</p></div>
-    </div>
-  </div>
-
-  <div class="advanced-chart-grid">
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health</h3><span>Higher is better</span></div><div class="advanced-chart-wrap"><canvas id="advancedHealthChart"></canvas></div><div class="advanced-card-foot" id="advancedHealthSummary">Shows the repositories with the strongest calculated health indicators.</div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Developer Activity</h3><span>Daily commits and PRs</span></div><div class="advanced-chart-wrap"><canvas id="advancedDeveloperChart"></canvas></div><div class="advanced-card-foot">Use the trend to spot sustained activity changes rather than judging a single day.</div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Build Reliability Trend</h3><span>Failures / canceled / partial</span></div><div class="advanced-chart-wrap"><canvas id="advancedFailureChart"></canvas></div><div class="advanced-card-foot">A spike means more runs ended without a successful result on that day.</div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Open Work Item Aging</h3><span>Older items need attention</span></div><div class="advanced-chart-wrap"><canvas id="advancedAgingChart"></canvas></div><div class="advanced-card-foot" id="advancedAgingSummary">Shows how currently open work items are distributed by age.</div></div>
-  </div>
-
-  <div class="advanced-card"><div class="advanced-card-head"><h3>Repository Health Detail</h3><span>Freshness + protection + PR health</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Repository</th><th>Branches</th><th>Stale</th><th>Protected</th><th>Freshness</th><th>Protection</th><th>Health</th></tr></thead><tbody id="advancedRepoHealthBody"></tbody></table></div></div>
-  <div class="advanced-card"><div class="advanced-card-head"><h3>Pipeline Reliability Detail</h3><span>Overall + recent success</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Pipeline</th><th>Runs</th><th>Success</th><th>Recent</th><th>Failures / Other</th><th>Health</th></tr></thead><tbody id="advancedPipelineHealthBody"></tbody></table></div></div>
-  <div class="advanced-two-col">
-    <div class="advanced-card"><div class="advanced-card-head"><h3>User Access Review Queue</h3><span>Heuristic indicators only</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>User</th><th>Email</th><th>Memberships</th><th>Last Access</th><th>Why review?</th><th>Indicator</th></tr></thead><tbody id="advancedRiskBody"></tbody></table></div></div>
-    <div class="advanced-card"><div class="advanced-card-head"><h3>Service Connection Usage</h3><span>Only verified last-used telemetry is classified</span></div><div class="advanced-table-wrap"><table class="advanced-table"><thead><tr><th>Connection</th><th>Type</th><th>Usage</th><th>Last Used</th></tr></thead><tbody id="advancedServiceBody"></tbody></table></div></div>
-  </div>
-</section>
-
 </div>
 </main>
 </div>
@@ -929,14 +851,13 @@ See More (<span id="workItemsRemainingCount">0</span> remaining)
 <!-- Modular Scripts -->
 <script src="assets/m1_5dee75f7117c.js"></script>
 <script src="assets/m2_6993d7c7e108.js"></script>
-<script src="assets/m3_3184062e0706.js?v=20260901-service-agent-chart"></script>
+<script src="assets/m3_3184062e0706.js"></script>
 <script src="assets/m4_4e7f1171efff.js"></script>
-<script src="assets/m5_5058d6a5faa5.js?v=20260901-user-access-identity-v2"></script>
+<script src="assets/m5_5058d6a5faa5.js"></script>
 <script src="assets/m6_5a6529fb0cd5.js"></script>
 <script src="assets/m7_2b021bb8133f.js"></script>
 <script src="assets/m8_94a8478ccca5.js"></script>
 <script src="assets/m9_9eddd4881ee8.js"></script>
 <script src="assets/m10_db030ee8db9c.js"></script>
-<script src="assets/m11_advanced_analytics.js"></script>
 </body>
 </html>
