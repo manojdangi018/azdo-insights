@@ -20,3 +20,9 @@ Each workspace has its own chart state:
 - Advanced Analytics
 
 For the same workspace, Project A and Project B are also isolated.
+
+## Service Connections & Agents chart
+- Agent Pool Inventory uses a vertical bar chart.
+- Pool names are on the X-axis.
+- Agent Count is on the Y-axis.
+- This is implemented without changing chart behavior in other workspaces.
