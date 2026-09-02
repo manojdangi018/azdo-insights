@@ -78,6 +78,8 @@ return (rawStore.serviceConnections?.length || 0) > 0 ||
 (rawStore.agentPools?.length || 0) > 0;
 case 'users':
 return (rawStore.userEntitlements?.length || 0) > 0;
+case 'advanced_analytics':
+return Object.values(rawStore).some(v => Array.isArray(v) && v.length > 0);
 default:
 return false;
 }
@@ -461,7 +463,7 @@ subWorkItems.classList.remove('hidden');
 }
 function showSection(viewId) {
 activeViewSection = `view-${viewId}`;
-['repositories', 'access', 'activity', 'pipelines', 'serviceagents', 'users', 'workitems'].forEach(v => {
+['repositories', 'access', 'activity', 'pipelines', 'serviceagents', 'users', 'workitems', 'advanced'].forEach(v => {
 document.getElementById(`view-${v}`).classList.toggle('hidden', v !== viewId);
 });
 }
@@ -481,7 +483,8 @@ work_items: 'workitems',
 user_activity: 'activity',
 user_access: 'access',
 service_agents: 'serviceagents',
-users: 'users'
+users: 'users',
+advanced_analytics: 'advanced'
 };
 const viewId = viewMap[category] || 'repositories';
 document.querySelectorAll('.sidebar-item').forEach(btn => {
@@ -490,6 +493,9 @@ btn.classList.toggle('active', btn.dataset.view === viewId);
 if (typeof showSection === 'function') showSection(viewId);
 if (typeof configureServiceAgentsOverview === 'function') {
 configureServiceAgentsOverview(viewId === 'serviceagents');
+}
+if (typeof configureAdvancedAnalytics === 'function') {
+configureAdvancedAnalytics(viewId === 'advanced');
 }
 renderActiveSubstep();
 restoreWorkspaceDisplayState(category);
@@ -730,6 +736,11 @@ exportToExcelFile({ "Access & Permissions": accessData }, "AzureDevOps_Security_
 }
 
 function changeChartType(type) {
+if (activeViewSection === 'view-serviceagents') {
+currentChartType = 'bar';
+renderChart(currentChartData.labels, currentChartData.values, currentChartData.label);
+return;
+}
 currentChartType = type.toLowerCase() === 'pie' ? 'pie' : type;
 renderChart(currentChartData.labels, currentChartData.values, currentChartData.label);
 }
@@ -740,6 +751,7 @@ if (chartInstance) chartInstance.destroy();
 const palette = ['#3b82f6', '#10b981', '#6366f1', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#84cc16', '#f43f5e', '#a855f7'];
 const isPie = currentChartType === 'pie' || currentChartType === 'doughnut';
 const isLine = currentChartType === 'line';
+const isServiceAgentsChart = activeViewSection === 'view-serviceagents' && currentChartType === 'bar';
 if (typeof ChartDataLabels !== 'undefined') {
 Chart.register(ChartDataLabels);
 }
@@ -761,6 +773,7 @@ borderRadius: currentChartType === 'bar' ? 6 : 0
 options: {
 responsive: true,
 maintainAspectRatio: false,
+indexAxis: isServiceAgentsChart ? 'y' : 'x',
 layout: {
 padding: {
 top: isPie ? 10 : 25,
@@ -787,7 +800,21 @@ return value > 0 ? value : (isPie ? '' : '0');
 }
 }
 },
-scales: isPie ? {} : {
+scales: isPie ? {} : isServiceAgentsChart ? {
+x: {
+beginAtZero: true,
+grid: { color: '#f1f5f9' },
+ticks: { precision: 0 }
+},
+y: {
+grid: { display: false },
+ticks: {
+autoSkip: false,
+maxRotation: 0,
+minRotation: 0
+}
+}
+} : {
 y: {
 beginAtZero: true,
 grid: { color: '#f1f5f9' },

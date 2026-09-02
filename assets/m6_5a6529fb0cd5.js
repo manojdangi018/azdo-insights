@@ -126,12 +126,15 @@ reposTouched.add(r.name);
 userPRs.push({
 id: pr.pullRequestId || pr.id || '',
 repo: r.name,
+repoId: r.id,
 title: pr.title || 'Untitled PR',
 source: (pr.sourceRefName || '').replace('refs/heads/', ''),
 target: (pr.targetRefName || '').replace('refs/heads/', ''),
 status: pr.status || 'unknown',
 createdDate: isNaN(prDate.getTime()) ? 'N/A' : prDate.toLocaleDateString(),
-rawDate: prDate
+rawDate: prDate,
+closedDate: pr.closedDate ? new Date(pr.closedDate).toLocaleDateString() : 'N/A',
+rawClosedTimestamp: pr.closedDate ? new Date(pr.closedDate).getTime() : null
 });
 }
 }
