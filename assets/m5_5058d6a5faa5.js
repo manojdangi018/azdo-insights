@@ -173,8 +173,6 @@ async function resolveRequestedAccessUser(org, query, authHeader) {
   const candidates = [];
   const seen = new Set();
 
-  // Search the exact input first. Only use the lowercase fallback when the
-  // first search returned no candidates, avoiding a redundant API request.
   for (const variant of variants) {
     try {
       const url =
@@ -203,7 +201,6 @@ async function resolveRequestedAccessUser(org, query, authHeader) {
         }
       }
     } catch (_) {}
-    if (candidates.length) break;
   }
 
   if (!candidates.length) return null;
@@ -273,30 +270,29 @@ async function fetchProjectAccessContext(org, project, authHeader) {
     throw new Error('Azure DevOps did not return a Graph descriptor for the selected project.');
   }
 
-  // Groups and teams are independent after the project descriptor is known.
-  // Fetch them concurrently so one workspace load does not serialize the two trees.
+  // Graph Groups is project-scope aware and uses the Graph preview API.
   const groupsUrl =
     `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
     `/_apis/graph/groups` +
     `?scopeDescriptor=${encodeURIComponent(projectDescriptor)}` +
     `&api-version=${ACCESS_GRAPH_API_VERSION}`;
 
+  const groupResult = await fetchAzDoPaged(groupsUrl, authHeader, {
+    pageSize: 500,
+    maxPages: AZDO_API_MAX_PAGES
+  });
+
+  // Core Teams is a stable 7.1 API.
   const teamsUrl =
     `https://dev.azure.com/${encodeURIComponent(org)}` +
     `/_apis/projects/${encodeURIComponent(project)}/teams` +
     `?$expandIdentity=true&$top=500` +
     `&api-version=${AZDO_STABLE_API_VERSION}`;
 
-  const [groupResult, teamResult] = await Promise.all([
-    fetchAzDoPaged(groupsUrl, authHeader, {
-      pageSize: 500,
-      maxPages: AZDO_API_MAX_PAGES
-    }),
-    fetchAzDoPaged(teamsUrl, authHeader, {
-      pageSize: 500,
-      maxPages: AZDO_API_MAX_PAGES
-    })
-  ]);
+  const teamResult = await fetchAzDoPaged(teamsUrl, authHeader, {
+    pageSize: 500,
+    maxPages: AZDO_API_MAX_PAGES
+  });
 
   return {
     projectInfo,
@@ -408,58 +404,48 @@ function sortAccessRows(rows) {
   });
 }
 
-// Remove Azure DevOps project-scoped group prefix without constructing a dynamic RegExp.
-// Some project names contain regex-significant characters (and the previous
-// implementation could produce an invalid pattern such as ^\[EDS\]:\).
-function cleanAccessContainerName(value, project) {
-  const raw = String(value || '').trim();
-  const projectName = String(project || '').trim();
-  if (!raw || !projectName) return raw;
-
-  const prefix = `[${projectName}]\\`;
-  if (raw.startsWith(prefix)) return raw.slice(prefix.length);
-
-  return raw;
-}
-
 async function fetchProjectLevelAccess(context, org, project, authHeader) {
   const descriptorCache = new Map();
   const rows = [];
   const groupCounts = {};
   const groupUserSets = new Map();
 
-  await Promise.all([
-    ...context.groups.map(async group => {
-      const groupName = cleanAccessContainerName(
-        group.displayName || group.principalName || 'Unnamed Group',
-        project
+  for (const group of context.groups) {
+    const groupName = String(group.displayName || group.principalName || 'Unnamed Group')
+      .replace(new RegExp(`^\\[${String(project).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]\\\\`), '');
+
+    try {
+      const users = uniqueAccessUsers(
+        await expandGroupUsers(org, group.descriptor, authHeader, descriptorCache)
       );
-      try {
-        const users = uniqueAccessUsers(
-          await expandGroupUsers(org, group.descriptor, authHeader, descriptorCache)
-        );
-        groupUserSets.set(group.descriptor, users);
-        groupCounts[groupName] = users.length;
-        users.forEach(user => rows.push(makeAccessRow(groupName, 'Group', user)));
-      } catch (error) {
-        groupUserSets.set(group.descriptor, []);
-        groupCounts[groupName] = 0;
-        console.warn(`[User Access] Unable to read group "${groupName}":`, error);
-      }
-    }),
-    ...context.teams.map(async team => {
-      try {
-        const users = uniqueAccessUsers(
-          await fetchTeamMembers(org, project, team.id, authHeader)
-        );
-        groupCounts[team.name] = users.length;
-        users.forEach(user => rows.push(makeAccessRow(team.name, 'Team', user)));
-      } catch (error) {
-        groupCounts[team.name] = 0;
-        console.warn(`[User Access] Unable to read team "${team.name}":`, error);
-      }
-    })
-  ]);
+
+      groupUserSets.set(group.descriptor, users);
+      groupCounts[groupName] = users.length;
+
+      users.forEach(user => {
+        rows.push(makeAccessRow(groupName, 'Group', user));
+      });
+    } catch (error) {
+      groupUserSets.set(group.descriptor, []);
+      groupCounts[groupName] = 0;
+      console.warn(`[User Access] Unable to read group "${groupName}":`, error);
+    }
+  }
+
+  for (const team of context.teams) {
+    try {
+      const users = uniqueAccessUsers(
+        await fetchTeamMembers(org, project, team.id, authHeader)
+      );
+      groupCounts[team.name] = users.length;
+      users.forEach(user => {
+        rows.push(makeAccessRow(team.name, 'Team', user));
+      });
+    } catch (error) {
+      groupCounts[team.name] = 0;
+      console.warn(`[User Access] Unable to read team "${team.name}":`, error);
+    }
+  }
 
   const uniqueMembers = uniqueAccessUsers(
     rows.map(r => ({
@@ -478,64 +464,6 @@ async function fetchProjectLevelAccess(context, org, project, authHeader) {
   };
 }
 
-function accessTeamDescriptor(team = {}) {
-  const descriptor = team.subjectDescriptor ||
-    team.identity?.subjectDescriptor ||
-    team.identity?.descriptor?.identifier ||
-    (typeof team.identity?.descriptor === 'string' ? team.identity.descriptor : '') ||
-    team.descriptor || '';
-  return String(descriptor || '').trim();
-}
-
-async function getUserUpwardMemberships(org, userDescriptor, authHeader, cache) {
-  if (!userDescriptor) return [];
-  const cacheKey = `user-up:${userDescriptor}`;
-  if (cache.has(cacheKey)) return cache.get(cacheKey);
-  const promise = (async () => {
-    const url =
-      `https://vssps.dev.azure.com/${encodeURIComponent(org)}` +
-      `/_apis/graph/Memberships/${encodeURIComponent(userDescriptor)}` +
-      `?direction=Up&api-version=${ACCESS_GRAPH_API_VERSION}`;
-    const result = await fetchAzDoPaged(url, authHeader, {
-      pageSize: 500,
-      maxPages: AZDO_API_MAX_PAGES
-    });
-    return Array.isArray(result?.value) ? result.value : [];
-  })();
-  cache.set(cacheKey, promise);
-  return promise;
-}
-
-async function collectUserAncestorDescriptors(org, userDescriptor, authHeader, membershipCache, targetDescriptors = new Set(), maxDepth = 3, maxContainers = 150) {
-  const found = new Set();
-  let frontier = new Set([String(userDescriptor || '')].filter(Boolean));
-  const targets = new Set([...targetDescriptors].map(v => String(v || '').trim().toLowerCase()).filter(Boolean));
-
-  for (let depth = 0; depth < maxDepth && frontier.size && found.size < maxContainers; depth += 1) {
-    const memberships = await Promise.all(
-      [...frontier].slice(0, maxContainers).map(descriptor =>
-        getUserUpwardMemberships(org, descriptor, authHeader, membershipCache)
-      )
-    );
-    const next = new Set();
-
-    memberships.flat().forEach(membership => {
-      const container = String(membership?.containerDescriptor || '').trim();
-      if (!container) return;
-      const key = container.toLowerCase();
-      if (found.has(key)) return;
-      found.add(key);
-
-      // Once a project group/team is found, we have the membership we need and
-      // do not traverse above it into organization-level containers.
-      if (!targets.has(key)) next.add(container);
-    });
-
-    frontier = next;
-  }
-  return found;
-}
-
 async function fetchSpecificUserAccess(context, org, project, userQuery, authHeader) {
   const query = String(userQuery || '').trim();
   if (!query) {
@@ -549,7 +477,10 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
     };
   }
 
+  // Resolve the requested person first using Azure DevOps identity records.
+  // We then match project membership rows by authoritative identifiers.
   const resolvedUser = await resolveRequestedAccessUser(org, query, authHeader);
+
   if (!resolvedUser) {
     return {
       user: null,
@@ -561,100 +492,52 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
     };
   }
 
-  // Fast path: Graph upward memberships can avoid downloading every member.
-  // Some Azure DevOps organizations/identity types return 404 for this endpoint.
-  // In that case, fall back to the proven project-member path rather than failing
-  // the whole User Access operation.
-  if (resolvedUser.descriptor) {
-    try {
-      const membershipCache = new Map();
-      const normalize = value => String(value || '').trim().toLowerCase();
-      const projectTargetDescriptors = new Set([
-        ...(context.groups || []).map(g => g?.descriptor),
-        ...(context.teams || []).map(t => accessTeamDescriptor(t))
-      ].map(normalize).filter(Boolean));
+  const projectResult = await fetchProjectLevelAccess(
+    context,
+    org,
+    project,
+    authHeader
+  );
 
-      const ancestorDescriptors = await collectUserAncestorDescriptors(
-        org,
-        resolvedUser.descriptor,
-        authHeader,
-        membershipCache,
-        projectTargetDescriptors,
-        3,
-        150
-      );
-      const ancestorKeys = new Set([...ancestorDescriptors].map(normalize).filter(Boolean));
-      const rows = [];
-      const groupCounts = {};
-      const teamMemberships = [];
-      const groupMemberships = [];
+  const allRows = projectResult.rows || [];
 
-      for (const group of (context.groups || [])) {
-        const descriptor = normalize(group.descriptor);
-        if (!descriptor || !ancestorKeys.has(descriptor)) continue;
-        const groupName = cleanAccessContainerName(
-          group.displayName || group.principalName || 'Unnamed Group',
-          project
-        );
-        groupCounts[groupName] = 1;
-        groupMemberships.push({ name: groupName, descriptor: group.descriptor, type: 'Group' });
-        rows.push(makeAccessRow(groupName, 'Group', resolvedUser));
-      }
-
-      for (const team of (context.teams || [])) {
-        const descriptor = normalize(accessTeamDescriptor(team));
-        if (!descriptor || !ancestorKeys.has(descriptor)) continue;
-        groupCounts[team.name] = 1;
-        teamMemberships.push({ name: team.name, id: team.id || '', type: 'Team' });
-        rows.push(makeAccessRow(team.name, 'Team', resolvedUser));
-      }
-
-      // Only use the fast-path result when it found at least one project
-      // membership. An empty result is ambiguous and is safer to verify using
-      // the authoritative member lists below.
-      if (rows.length) {
-        return buildSpecificUserAccessResult(
-          context,
-          project,
-          resolvedUser,
-          sortAccessRows(rows),
-          { groupCounts, teamMemberships, groupMemberships }
-        );
-      }
-    } catch (error) {
-      console.warn('[User Access] Upward membership lookup failed; using project-member fallback:', error);
-    }
-  }
-
-  // Proven fallback: enumerate project groups/teams and match the resolved
-  // Azure DevOps identity by authoritative identity fields. This preserves the
-  // behavior of the working Identity Resolution V2 implementation.
-  const projectResult = await fetchProjectLevelAccess(context, org, project, authHeader);
   const normalize = value => String(value || '').trim().toLowerCase();
   const selectedIds = new Set(
     [resolvedUser.id, resolvedUser.originId, resolvedUser.descriptor]
-      .map(normalize).filter(Boolean)
+      .map(normalize)
+      .filter(Boolean)
   );
   const selectedEmails = new Set(
     [resolvedUser.mailAddress, resolvedUser.email, resolvedUser.uniqueName, resolvedUser.principalName]
-      .map(normalize).filter(Boolean)
+      .map(normalize)
+      .filter(Boolean)
   );
-  const matchingRows = (projectResult.rows || []).filter(row => {
-    const rowIds = [row.id, row.originId, row.descriptor]
-      .map(normalize).filter(Boolean);
-    if (rowIds.some(id => selectedIds.has(id))) return true;
-    const rowEmails = [row.email, row.uniqueName, row.principalName]
-      .map(normalize).filter(Boolean);
-    return rowEmails.some(email => selectedEmails.has(email));
-  });
 
-  const groupCounts = {};
+  const matchesResolvedIdentity = row => {
+    const rowIds = [row.id, row.originId, row.descriptor]
+      .map(normalize)
+      .filter(Boolean);
+
+    // Strongest match: Azure DevOps identity ID / origin ID / descriptor.
+    if (rowIds.some(id => selectedIds.has(id))) return true;
+
+    // Controlled fallback for membership payloads that omit identity IDs.
+    const rowEmails = [row.email, row.uniqueName, row.principalName]
+      .map(normalize)
+      .filter(Boolean);
+    return rowEmails.some(email => selectedEmails.has(email));
+  };
+
+  const matchingRows = allRows.filter(matchesResolvedIdentity);
   const teamMemberships = [];
   const groupMemberships = [];
+  const groupCounts = {};
+
   for (const row of matchingRows) {
     const containerName = String(row.team || 'Unnamed');
     const type = String(row.type || 'Group');
     groupCounts[containerName] = 1;
+
     if (type === 'Team') {
       if (!teamMemberships.some(x => x.name === containerName)) {
         teamMemberships.push({
@@ -664,9 +547,16 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
         });
       }
     } else if (!groupMemberships.some(x => x.name === containerName)) {
-      const matchingGroup = context.groups.find(g =>
-        cleanAccessContainerName(g.displayName || g.principalName || '', project) === containerName
-      );
+      const matchingGroup = context.groups.find(g => {
+        const displayName = String(g.displayName || g.principalName || '').replace(
+          new RegExp(
+            `^\\[${String(project).replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')}\\]\\\\`
+          ),
+          ''
+        );
+        return displayName === containerName;
+      });
+
       groupMemberships.push({
         name: containerName,
         descriptor: matchingGroup?.descriptor || '',
@@ -675,23 +565,9 @@ async function fetchSpecificUserAccess(context, org, project, userQuery, authHea
     }
   }
 
-  return buildSpecificUserAccessResult(
-    context,
-    project,
-    resolvedUser,
-    sortAccessRows(matchingRows),
-    { groupCounts, teamMemberships, groupMemberships }
-  );
-}
-
-function buildSpecificUserAccessResult(context, project, resolvedUser, matchingRows, extras = {}) {
-  const rows = matchingRows || [];
-  const groupCounts = extras.groupCounts || {};
-  const teamMemberships = extras.teamMemberships || [];
-  const groupMemberships = extras.groupMemberships || [];
   return {
     user: resolvedUser,
-    rows: sortAccessRows(rows),
+    rows: sortAccessRows(matchingRows),
     groupCounts,
     teamMemberships,
     groupMemberships,

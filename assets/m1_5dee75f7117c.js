@@ -7,9 +7,6 @@ const AZDO_API_MAX_RETRIES = 3;
 const AZDO_API_DEFAULT_TIMEOUT_MS = 30000;
 const AZDO_API_MAX_PAGES = 200;
 const AZDO_API_MAX_CONCURRENCY = 6;
-const AZDO_API_CACHE_TTL_MS = 120000;
-const AZDO_API_CACHE_MAX_ENTRIES = 600;
-const azdoApiCache = new Map();
 
 class AzureDevOpsApiError extends Error {
 constructor(message, status = 0, details = {}) {
@@ -113,16 +110,50 @@ let azdoActiveAbortController = null;
 let azdoOperationSequence = 0;
 let azdoApiRunState = null;
 let azdoApiRunActive = false;
+let azdoWorkspaceDiagnostics = {};
+let azdoRequestSequence = 0;
 let azdoRequestQueue = [];
 let azdoActiveRequests = 0;
 
-function beginAzDoOperation() {
+function getAzDoWorkspaceLabel() {
+const labels = {
+  'view-repositories': 'Repositories & Branches',
+  'view-pipelines': 'Pipelines & Builds',
+  'view-serviceagents': 'Service Connections & Agents',
+  'view-workitems': 'Work Items',
+  'view-activity': 'User Activity',
+  'view-access': 'User Access & Permissions',
+  'view-users': 'Organization & Project Users',
+  'view-advanced': 'Advanced Analytics'
+};
+try {
+  if (typeof activeViewSection !== 'undefined' && labels[activeViewSection]) return labels[activeViewSection];
+} catch (_) {}
+return 'Azure DevOps Workspace';
+}
+
+function deriveAzDoOperation(url, method = 'GET') {
+try {
+  const parsed = new URL(url, window.location.href);
+  const marker = '/_apis/';
+  const idx = parsed.pathname.toLowerCase().indexOf(marker);
+  let path = idx >= 0 ? parsed.pathname.slice(idx + marker.length) : parsed.pathname;
+  path = path.replace(/\/+/, '/').replace(/\/(?:[0-9a-f]{8}-[0-9a-f-]{27,}|[0-9]+)(?=\/|$)/gi, '/{id}');
+  return `${String(method || 'GET').toUpperCase()} /_apis/${path.replace(/^\//, '')}`;
+} catch (_) {
+  return `${String(method || 'GET').toUpperCase()} Azure DevOps API request`;
+}
+}
+
+function beginAzDoOperation(workspace = '') {
 if (azdoActiveAbortController) azdoActiveAbortController.abort();
 azdoActiveAbortController = new AbortController();
 azdoOperationSequence += 1;
 azdoApiRunActive = true;
+const resolvedWorkspace = workspace || getAzDoWorkspaceLabel();
 azdoApiRunState = {
   id: azdoOperationSequence,
+  workspace: resolvedWorkspace,
   startedAt: Date.now(),
   requests: 0,
   succeeded: 0,
@@ -131,7 +162,7 @@ azdoApiRunState = {
   pages: 0,
   truncated: false,
   cancelled: false,
-  cacheHits: 0
+  requestDetails: []
 };
 return azdoActiveAbortController;
 }
@@ -148,15 +179,32 @@ azdoActiveAbortController.abort();
 if (typeof setStatus === 'function') setStatus('The current Azure DevOps operation was cancelled.', 'info');
 return true;
 }
-function getAzDoApiRunState() {
-return azdoApiRunState ? {
-  ...azdoApiRunState,
-  failures: [...azdoApiRunState.failures]
-} : null;
+function cloneAzDoDiagnosticState(state) {
+if (!state) return null;
+return {
+  ...state,
+  durationMs: Math.max(0, (state.completedAt || Date.now()) - state.startedAt),
+  failures: [...(state.failures || [])],
+  requestDetails: (state.requestDetails || []).map(r => ({ ...r }))
+};
 }
-function getAzDoCacheSummary() {
-  const hits = Number(azdoApiRunState?.cacheHits || 0);
-  return hits > 0 ? ` API cache reused ${hits} request${hits === 1 ? '' : 's'}.` : '';
+function finalizeAzDoDiagnostics() {
+if (!azdoApiRunState) return null;
+azdoApiRunState.completedAt = Date.now();
+azdoApiRunState.durationMs = Math.max(0, azdoApiRunState.completedAt - azdoApiRunState.startedAt);
+azdoApiRunState.partial = Boolean(azdoApiRunState.failures.length || azdoApiRunState.truncated || azdoApiRunState.cancelled);
+azdoWorkspaceDiagnostics[azdoApiRunState.workspace || 'Azure DevOps Workspace'] = cloneAzDoDiagnosticState(azdoApiRunState);
+return azdoApiRunState;
+}
+function getAzDoApiRunState() {
+return cloneAzDoDiagnosticState(azdoApiRunState);
+}
+function getAzDoWorkspaceDiagnostics() {
+return Object.values(azdoWorkspaceDiagnostics).map(cloneAzDoDiagnosticState);
+}
+function getAzDoLatestWorkspaceDiagnostic(workspace = '') {
+const key = workspace || getAzDoWorkspaceLabel();
+return cloneAzDoDiagnosticState(azdoWorkspaceDiagnostics[key] || null);
 }
 function getAzDoPartialResultMessage() {
 const state = azdoApiRunState;
@@ -168,13 +216,25 @@ if (state.cancelled) parts.push('operation cancelled');
 if (!parts.length) return '';
 return ` Partial result: ${parts.join('; ')}.`;
 }
-function recordAzDoFailure(error, url) {
+function recordAzDoFailure(error, url, requestRecord = null) {
 if (!azdoApiRunActive || !azdoApiRunState) return;
-azdoApiRunState.failures.push({
+const failure = {
+  requestId: requestRecord?.id || null,
+  operation: requestRecord?.operation || deriveAzDoOperation(url),
   status: Number(error?.status || 0),
   message: String(error?.rawMessage || error?.message || 'Unknown error'),
-  url: String(url || error?.url || '')
-});
+  url: String(url || error?.url || ''),
+  attempts: Number(error?.attempts || requestRecord?.attempts || 1),
+  retryable: error?.retryable === true
+};
+azdoApiRunState.failures.push(failure);
+if (requestRecord) {
+  requestRecord.outcome = error?.cancelled ? 'cancelled' : 'failed';
+  requestRecord.status = Number(error?.status || 0);
+  requestRecord.message = failure.message;
+  requestRecord.completedAt = Date.now();
+  requestRecord.durationMs = Math.max(0, requestRecord.completedAt - requestRecord.startedAt);
+}
 }
 function sleep(ms, signal) {
 return new Promise((resolve, reject) => {
@@ -262,96 +322,40 @@ const value = payload[property];
 return Array.isArray(value) ? value : [];
 }
 
-function azdoCacheHash(value) {
-  let hash = 2166136261;
-  const text = String(value || '');
-  for (let i = 0; i < text.length; i += 1) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16);
-}
-function azdoCacheKey(url, authHeader, method = 'GET') {
-  // The PAT itself is never stored in the cache key. Only a short in-memory
-  // fingerprint is retained so changing credentials cannot reuse old data.
-  return `${method.toUpperCase()}|${azdoCacheHash(authHeader)}|${String(url)}`;
-}
-function azdoCacheGet(key) {
-  const entry = azdoApiCache.get(key);
-  if (!entry) return null;
-  if (entry.expiresAt <= Date.now()) {
-    azdoApiCache.delete(key);
-    return null;
-  }
-  // LRU touch.
-  entry.lastUsedAt = Date.now();
-  return entry.data;
-}
-function azdoCacheSet(key, data, ttlMs = AZDO_API_CACHE_TTL_MS) {
-  if (!key || data == null || ttlMs <= 0) return;
-  if (azdoApiCache.size >= AZDO_API_CACHE_MAX_ENTRIES) {
-    let oldestKey = null;
-    let oldest = Infinity;
-    for (const [candidateKey, entry] of azdoApiCache.entries()) {
-      if (entry.lastUsedAt < oldest) {
-        oldest = entry.lastUsedAt;
-        oldestKey = candidateKey;
-      }
-    }
-    if (oldestKey) azdoApiCache.delete(oldestKey);
-  }
-  azdoApiCache.set(key, {
-    data,
-    expiresAt: Date.now() + ttlMs,
-    lastUsedAt: Date.now()
-  });
-}
-function clearAzDoApiCache() {
-  azdoApiCache.clear();
-}
-function clearAzDoApiCacheForUrl(match) {
-  const text = String(match || '');
-  for (const key of azdoApiCache.keys()) {
-    if (key.includes(text)) azdoApiCache.delete(key);
-  }
-}
-if (typeof window !== 'undefined') {
-  window.clearAzDoApiCache = clearAzDoApiCache;
-  window.clearAzDoApiCacheForUrl = clearAzDoApiCacheForUrl;
-  window.getAzDoCacheSummary = getAzDoCacheSummary;
-}
-
 async function fetchAzDo(url, authHeader, options = {}) {
 const {
   retry = true,
   maxRetries = AZDO_API_MAX_RETRIES,
   timeoutMs = AZDO_API_DEFAULT_TIMEOUT_MS,
   signal: providedSignal = null,
-  cache: _cacheEnabled = true,
-  cacheMode = 'default',
-  cacheTtlMs: _cacheTtlMs = AZDO_API_CACHE_TTL_MS,
+  operationName = '',
   ...fetchOptions
 } = options || {};
 const signal = providedSignal || getAzDoAbortSignal();
-const requestMethod = String(fetchOptions.method || 'GET').toUpperCase();
-const useCache = _cacheEnabled !== false && cacheMode !== 'no-store' && requestMethod === 'GET' && Number(_cacheTtlMs) > 0;
-const cacheTtlMs = Number(_cacheTtlMs) > 0 ? Number(_cacheTtlMs) : AZDO_API_CACHE_TTL_MS;
-const cacheKey = useCache ? azdoCacheKey(url, authHeader, requestMethod) : '';
-if (useCache) {
-  const cached = azdoCacheGet(cacheKey);
-  if (cached !== null) {
-    if (azdoApiRunActive && azdoApiRunState) {
-      azdoApiRunState.cacheHits = Number(azdoApiRunState.cacheHits || 0) + 1;
-    }
-    return cached;
-  }
+const requestRecord = azdoApiRunActive && azdoApiRunState ? {
+  id: ++azdoRequestSequence,
+  operation: operationName || deriveAzDoOperation(url, fetchOptions.method || 'GET'),
+  method: String(fetchOptions.method || 'GET').toUpperCase(),
+  url: String(url || ''),
+  startedAt: Date.now(),
+  attempts: 0,
+  retries: 0,
+  status: null,
+  outcome: 'pending',
+  message: ''
+} : null;
+if (requestRecord) {
+  azdoApiRunState.requestDetails.push(requestRecord);
+  azdoApiRunState.requests += 1;
 }
 let lastError = null;
 const maxAttempts = retry ? Math.max(1, Number(maxRetries) + 1) : 1;
 for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  if (requestRecord) requestRecord.attempts = attempt;
   if (signal?.aborted) {
     const error = new AzureDevOpsApiError('Azure DevOps request cancelled.', 0, { cancelled: true, url, attempts: attempt });
     if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.cancelled = true;
+    if (requestRecord) { requestRecord.outcome = 'cancelled'; requestRecord.status = 0; requestRecord.message = error.message; requestRecord.completedAt = Date.now(); requestRecord.durationMs = requestRecord.completedAt - requestRecord.startedAt; }
     throw error;
   }
   await acquireAzDoRequestSlot(signal);
@@ -362,7 +366,6 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
   signal?.addEventListener('abort', abortFromCaller, { once: true });
   if (timeoutMs > 0) timeoutId = setTimeout(() => { timedOut = true; timeoutController.abort(); }, timeoutMs);
   try {
-    if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.requests += 1;
     let res;
     try {
       res = await fetch(url, {
@@ -422,20 +425,27 @@ for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       Object.defineProperty(data, '__azdoStatus', { value: res.status, enumerable: false, configurable: true });
     } catch (_) {}
     if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.succeeded += 1;
-    if (useCache) azdoCacheSet(cacheKey, data, cacheTtlMs);
+    if (requestRecord) {
+      requestRecord.status = res.status;
+      requestRecord.outcome = 'succeeded';
+      requestRecord.completedAt = Date.now();
+      requestRecord.durationMs = requestRecord.completedAt - requestRecord.startedAt;
+    }
     return data;
   } catch (error) {
     lastError = error;
     if (isAzDoCancellation(error)) {
       if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.cancelled = true;
+      if (requestRecord) { requestRecord.outcome = 'cancelled'; requestRecord.status = Number(error?.status || 0); requestRecord.message = String(error?.message || 'Request cancelled.'); requestRecord.completedAt = Date.now(); requestRecord.durationMs = requestRecord.completedAt - requestRecord.startedAt; }
       throw error;
     }
     const canRetry = retry && attempt < maxAttempts && (error?.retryable === true || isRetryableStatus(error?.status));
     if (!canRetry) {
-      recordAzDoFailure(error, url);
+      recordAzDoFailure(error, url, requestRecord);
       throw error;
     }
     if (azdoApiRunActive && azdoApiRunState) azdoApiRunState.retries += 1;
+    if (requestRecord) requestRecord.retries += 1;
     await sleep(error?.retryDelayMs || getRetryDelayMs(null, attempt), signal);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -526,89 +536,17 @@ function getIdentityCandidates(identity = {}) {
   });
   return [...expanded];
 }
-/*
- * Confidence-based identity matching.
- *
- * The old implementation treated partial string containment as a match. That
- * is unsafe for identities because a query such as "man" can match multiple
- * people, and a partial email/name can silently attribute activity to the wrong
- * user. We keep the same public helper name for backward compatibility, but
- * matching now delegates to an explicit score with a conservative threshold.
- *
- * Scores:
- *   100  authoritative identity/email fields exact
- *    95  display name exact
- *    90  email/UPN local-part exact (query without @)
- *    88  complete normalized name-token match
- *     0  partial/fuzzy-only match (rejected)
- */
-const IDENTITY_MATCH_THRESHOLD = 88;
-
-function scoreIdentityMatch(query, identity = {}) {
-  const rawQuery = String(query ?? '').trim();
-  const q = normalizeIdentityText(rawQuery);
-  if (!q) return { matched: true, confidence: 100, method: 'empty-query', query: q };
-
-  const normalize = value => normalizeIdentityText(value);
-  const exactFields = [
-    ['id', identity.id],
-    ['descriptor', identity.descriptor],
-    ['originId', identity.originId],
-    ['mailAddress', identity.mailAddress],
-    ['email', identity.email],
-    ['uniqueName', identity.uniqueName],
-    ['principalName', identity.principalName],
-    ['accountName', identity.accountName]
-  ];
-
-  for (const [method, value] of exactFields) {
-    const candidate = normalize(value);
-    if (candidate && candidate === q) {
-      return { matched: true, confidence: 100, method: `exact-${method}`, query: q };
-    }
-  }
-
-  const displayNames = [identity.displayName, identity.name, identity.providerDisplayName, identity.customDisplayName]
-    .map(normalize)
-    .filter(Boolean);
-  if (displayNames.some(value => value === q)) {
-    return { matched: true, confidence: 95, method: 'exact-display-name', query: q };
-  }
-
-  // A username/local-part is a useful convenience only when the query is
-  // already the complete local-part. Never accept a substring of it.
-  if (!q.includes('@')) {
-    const emailFields = [identity.mailAddress, identity.email, identity.uniqueName, identity.principalName]
-      .map(normalize)
-      .filter(Boolean);
-    if (emailFields.some(value => value.includes('@') && value.split('@')[0] === q)) {
-      return { matched: true, confidence: 90, method: 'exact-email-local-part', query: q };
-    }
-  }
-
-  // Allow "First Last" vs "first.last"/"First-Last" without allowing a
-  // partial token such as "First" to match "First Last".
-  const queryTokens = q.split(/[\s._-]+/).filter(Boolean);
-  if (queryTokens.length >= 2) {
-    const queryTokenSet = [...new Set(queryTokens)].sort();
-    const tokenCandidates = [...displayNames, ...getIdentityCandidates(identity)]
-      .map(value => normalize(value))
-      .filter(Boolean);
-    for (const candidate of tokenCandidates) {
-      const candidateTokens = candidate.split(/[\s._-]+/).filter(Boolean);
-      if (candidateTokens.length !== queryTokenSet.length) continue;
-      if ([...new Set(candidateTokens)].sort().every((token, i) => token === queryTokenSet[i])) {
-        return { matched: true, confidence: 88, method: 'exact-name-tokens', query: q };
-      }
-    }
-  }
-
-  return { matched: false, confidence: 0, method: 'no-confident-match', query: q };
-}
-
 function identityMatchesQuery(query, identity = {}) {
-  const result = scoreIdentityMatch(query, identity);
-  return result.matched && result.confidence >= IDENTITY_MATCH_THRESHOLD;
+  const q = normalizeIdentityText(query);
+  if (!q) return true;
+  const qTokens = q.split(/[\s._-]+/).filter(Boolean);
+  const candidates = getIdentityCandidates(identity);
+  if (candidates.some(c => c === q || c.includes(q))) return true;
+  if (q.includes('@')) {
+    const prefix = q.split('@')[0];
+    if (candidates.some(c => c === prefix || c.includes(prefix))) return true;
+  }
+  return qTokens.length > 1 && candidates.some(c => qTokens.every(token => c.includes(token)));
 }
 function buildIdentitySearchVariants(query) {
   const q = String(query || '').trim();
@@ -627,12 +565,13 @@ function buildIdentitySearchVariants(query) {
 }
 window.normalizeIdentityText = normalizeIdentityText;
 window.getIdentityCandidates = getIdentityCandidates;
-window.IDENTITY_MATCH_THRESHOLD = IDENTITY_MATCH_THRESHOLD;
-window.scoreIdentityMatch = scoreIdentityMatch;
 window.identityMatchesQuery = identityMatchesQuery;
 window.buildIdentitySearchVariants = buildIdentitySearchVariants;
 window.fetchAzDoPaged = fetchAzDoPaged;
 window.beginAzDoOperation = beginAzDoOperation;
 window.cancelAzDoOperation = cancelAzDoOperation;
 window.getAzDoApiRunState = getAzDoApiRunState;
+window.getAzDoWorkspaceDiagnostics = getAzDoWorkspaceDiagnostics;
+window.getAzDoLatestWorkspaceDiagnostic = getAzDoLatestWorkspaceDiagnostic;
 window.getAzDoPartialResultMessage = getAzDoPartialResultMessage;
+window.finalizeAzDoDiagnostics = finalizeAzDoDiagnostics;

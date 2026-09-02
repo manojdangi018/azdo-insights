@@ -16,18 +16,13 @@ showSection('activity');
 startFetching(`Searching activity in project "${selectedProject}" for "${rawQuery}"...`);
 const queryLower = normalizeIdentityText(rawQuery);
 const searchAuthors = buildIdentitySearchVariants(rawQuery);
-let bestIdentityMatch = { confidence: 0, method: 'none' };
 function matchesUser(authorName, authorEmail, committerName, committerEmail) {
-const result = scoreIdentityMatch(rawQuery, {
+return identityMatchesQuery(rawQuery, {
   displayName: authorName,
   mailAddress: authorEmail,
   name: committerName,
   email: committerEmail
 });
-if (result.confidence > bestIdentityMatch.confidence) {
-  bestIdentityMatch = { confidence: result.confidence, method: result.method };
-}
-return result.matched && result.confidence >= (window.IDENTITY_MATCH_THRESHOLD || 88);
 }
 let cutoffDate = null;
 let fromDateIso = null;
@@ -223,7 +218,7 @@ Object.values(repoCommitMap),
 );
 stopFetching();
 setStatus(
-`Found ${userCommits.length} commits and ${userPRs.length} PRs in project "${selectedProject}" for "${rawQuery}". Identity match: ${bestIdentityMatch.method} (${bestIdentityMatch.confidence}% confidence).`,
+`Found ${userCommits.length} commits and ${userPRs.length} PRs in project "${selectedProject}" for "${rawQuery}".`,
 'success'
 );
 } catch (err) {

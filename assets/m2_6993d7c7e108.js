@@ -204,6 +204,7 @@ else el.classList.add('bg-blue-50', 'text-blue-700');
 const partial = type === 'success' ? getAzDoPartialResultMessage() : '';
 el.textContent = `${msg || ''}${partial}`;
 if (typeof renderCancelFetchButton === 'function') renderCancelFetchButton();
+if (!azdoApiRunActive && azdoApiRunState?.completedAt) renderDiagnosticsButton();
 }
 function renderCancelFetchButton() {
 const statusBar = document.getElementById('statusBar');
@@ -220,17 +221,100 @@ if (!btn) {
 }
 }
 function startFetching(message) {
-const controller = beginAzDoOperation();
+const controller = beginAzDoOperation(getAzDoWorkspaceLabel());
+if (azdoApiRunState) azdoApiRunState.workspace = getAzDoWorkspaceLabel();
 setStatus(message, 'info');
 document.getElementById('statusBar')?.classList.add('fetching');
 renderCancelFetchButton();
 return { id: azdoApiRunState?.id || 0, signal: controller.signal };
 }
 function stopFetching() {
+finalizeAzDoDiagnostics();
 document.getElementById('statusBar')?.classList.remove('fetching');
 document.getElementById('btnCancelAzDoFetch')?.remove();
 azdoActiveAbortController = null;
 azdoApiRunActive = false;
+renderDiagnosticsButton();
+}
+function formatDiagnosticDuration(ms) {
+const value = Number(ms || 0);
+if (value < 1000) return `${Math.max(0, Math.round(value))} ms`;
+if (value < 60000) return `${(value / 1000).toFixed(1)} s`;
+return `${Math.floor(value / 60000)}m ${Math.round((value % 60000) / 1000)}s`;
+}
+function renderDiagnosticsButton() {
+const statusBar = document.getElementById('statusBar');
+if (!statusBar) return;
+let btn = document.getElementById('btnAzDoDiagnostics');
+if (!btn) {
+  btn = document.createElement('button');
+  btn.id = 'btnAzDoDiagnostics';
+  btn.type = 'button';
+  btn.className = 'ml-2 inline-flex items-center rounded border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50';
+  btn.textContent = 'Diagnostics';
+  btn.addEventListener('click', () => openAzDoDiagnostics());
+  statusBar.appendChild(btn);
+}
+}
+function ensureAzDoDiagnosticsModal() {
+let modal = document.getElementById('azdoDiagnosticsModal');
+if (modal) return modal;
+modal = document.createElement('div');
+modal.id = 'azdoDiagnosticsModal';
+modal.className = 'azdo-diagnostics-modal hidden';
+modal.innerHTML = `
+  <div class="azdo-diagnostics-backdrop"></div>
+  <div class="azdo-diagnostics-panel" role="dialog" aria-modal="true" aria-labelledby="azdoDiagnosticsTitle">
+    <div class="azdo-diagnostics-head">
+      <div><div class="azdo-diagnostics-eyebrow">API RELIABILITY</div><h3 id="azdoDiagnosticsTitle">Request diagnostics</h3><p id="azdoDiagnosticsSubtitle">Latest workspace operation</p></div>
+      <button type="button" id="azdoDiagnosticsClose" class="azdo-diagnostics-close" aria-label="Close diagnostics">×</button>
+    </div>
+    <div id="azdoDiagnosticsSummary" class="azdo-diagnostics-summary"></div>
+    <div class="azdo-diagnostics-table-wrap"><table class="azdo-diagnostics-table"><thead><tr><th>Operation</th><th>Status</th><th>Attempts</th><th>Duration</th><th>Result</th></tr></thead><tbody id="azdoDiagnosticsBody"></tbody></table></div>
+    <div id="azdoDiagnosticsFailures" class="azdo-diagnostics-failures hidden"></div>
+  </div>`;
+document.body.appendChild(modal);
+modal.querySelector('.azdo-diagnostics-backdrop')?.addEventListener('click', closeAzDoDiagnostics);
+modal.querySelector('#azdoDiagnosticsClose')?.addEventListener('click', closeAzDoDiagnostics);
+return modal;
+}
+function openAzDoDiagnostics() {
+const modal = ensureAzDoDiagnosticsModal();
+const state = getAzDoLatestWorkspaceDiagnostic();
+if (!state) return;
+const summary = document.getElementById('azdoDiagnosticsSummary');
+const body = document.getElementById('azdoDiagnosticsBody');
+const failures = document.getElementById('azdoDiagnosticsFailures');
+document.getElementById('azdoDiagnosticsSubtitle').textContent = `${state.workspace} · Operation #${state.id}`;
+summary.innerHTML = `
+  <div><span>Requests</span><strong>${Number(state.requests || 0)}</strong></div>
+  <div><span>Successful</span><strong>${Number(state.succeeded || 0)}</strong></div>
+  <div><span>Failed</span><strong>${Number(state.failures?.length || 0)}</strong></div>
+  <div><span>Retries</span><strong>${Number(state.retries || 0)}</strong></div>
+  <div><span>Pages</span><strong>${Number(state.pages || 0)}</strong></div>
+  <div><span>Duration</span><strong>${escapeHtml(formatDiagnosticDuration(state.durationMs))}</strong></div>`;
+const rows = (state.requestDetails || []).map(r => {
+  const status = Number(r.status || 0);
+  const statusText = status ? String(status) : '—';
+  const cls = r.outcome === 'succeeded' ? 'good' : r.outcome === 'cancelled' ? 'warn' : 'bad';
+  return `<tr><td><strong>${escapeHtml(r.operation || 'Azure DevOps request')}</strong><small>${escapeHtml(r.method || 'GET')}</small></td><td><span class="azdo-diag-status ${cls}">${escapeHtml(statusText)}</span></td><td>${Number(r.attempts || 0)}${Number(r.retries || 0) ? ` <small>(${Number(r.retries)} retries)</small>` : ''}</td><td>${escapeHtml(formatDiagnosticDuration(r.durationMs))}</td><td>${escapeHtml(r.outcome || 'pending')}</td></tr>`;
+}).join('');
+body.innerHTML = rows || '<tr><td colspan="5" class="azdo-diag-empty">No request details recorded.</td></tr>';
+if (state.failures?.length) {
+  failures.classList.remove('hidden');
+  failures.innerHTML = `<strong>Failures</strong>${state.failures.map(f => `<div><span>${escapeHtml(f.operation || 'Request')}</span><span>HTTP ${escapeHtml(f.status || 0)}</span><span>${escapeHtml(f.message || 'Unknown error')}</span></div>`).join('')}`;
+} else {
+  failures.classList.add('hidden');
+  failures.innerHTML = '';
+}
+modal.classList.remove('hidden');
+modal.classList.add('is-open');
+}
+function closeAzDoDiagnostics() {
+const modal = document.getElementById('azdoDiagnosticsModal');
+if (!modal) return;
+modal.classList.remove('is-open');
+modal.classList.add('hidden');
 }
 function showWorkspacePage() {
 document.getElementById('connectionPage')?.classList.add('hidden');
@@ -773,7 +857,7 @@ borderRadius: currentChartType === 'bar' ? 6 : 0
 options: {
 responsive: true,
 maintainAspectRatio: false,
-indexAxis: 'x',
+indexAxis: isServiceAgentsChart ? 'y' : 'x',
 layout: {
 padding: {
 top: isPie ? 10 : 25,
@@ -800,7 +884,21 @@ return value > 0 ? value : (isPie ? '' : '0');
 }
 }
 },
-scales: isPie ? {} : {
+scales: isPie ? {} : isServiceAgentsChart ? {
+x: {
+beginAtZero: true,
+grid: { color: '#f1f5f9' },
+ticks: { precision: 0 }
+},
+y: {
+grid: { display: false },
+ticks: {
+autoSkip: false,
+maxRotation: 0,
+minRotation: 0
+}
+}
+} : {
 y: {
 beginAtZero: true,
 grid: { color: '#f1f5f9' },
@@ -842,3 +940,6 @@ showConnectionPage();
 selectExplore('repositories');
 }
 });
+
+window.openAzDoDiagnostics = openAzDoDiagnostics;
+window.closeAzDoDiagnostics = closeAzDoDiagnostics;
